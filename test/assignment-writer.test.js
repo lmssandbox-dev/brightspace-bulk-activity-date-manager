@@ -71,14 +71,14 @@ test('undated Assignments retain every known availability type', async () => {
   }
 });
 test('missing settings and unknown availability block writes instead of defaulting', async () => {
-  for (const modify of [c=>delete c.Name,c=>delete c.CustomInstructions,c=>c.AllowOnlyUsersWithSpecialAccess=null,c=>c.Availability=null,c=>delete c.Availability.EndDateAvailabilityType,c=>c.Availability.StartDateAvailabilityType=99,c=>delete c.SubmissionRule]) {
+  for (const modify of [c=>delete c.Name,c=>delete c.CustomInstructions,c=>c.Availability=null,c=>delete c.Availability.EndDateAvailabilityType,c=>c.Availability.StartDateAvailabilityType=99]) {
     const {writer,current,calls}=setup();modify(current);assert.equal((await writer.updateActivityDates(request)).status,'failed');assert.equal(calls.length,1);
   }
 });
 test('plain instructions, null assessment and pre-1.98 payload are preserved', () => {
   const c=structuredClone(fixture);c.CustomInstructions={Text:'Plain instructions',Html:null};c.Assessment=null;delete c.SubmissionRule;
   const p=buildAssignmentPayload(c,dates,()=>false);
-  assert.deepEqual(p.CustomInstructions,{Content:'Plain instructions',Type:'Text'});assert.equal(p.Assessment,null);assert.equal(Object.hasOwn(p,'SubmissionRule'),false);
+  assert.deepEqual(p.CustomInstructions,{Content:'Plain instructions',Type:'Text'});assert.equal(Object.hasOwn(p,'Assessment'),false);assert.equal(Object.hasOwn(p,'SubmissionRule'),false);
 });
 test('read-back mismatch and unrelated changes are failures, not false success', async () => {
   for (const [options,category] of [[{ignoreWrite:true},'VERIFICATION_MISMATCH'],[{changeSettings:true},'SETTINGS_CHANGED']]) {
@@ -105,4 +105,21 @@ test('PUT transport permits only Assignment URLs and sanitizes upstream failures
   assert.equal(calls[0].method,'PUT');assert.equal(calls[0].maxRedirects,0);assert.equal(calls[0].timeout,15000);
   const broken=createAssignmentPut({leRoot:'https://tenant.example/d2l/api/le/1.98',oauth:{getAccessToken:async()=> 'SECRET'},http:async()=>{throw Object.assign(new Error('SECRET'),{response:{status:403}});}});
   await assert.rejects(()=>broken('https://tenant.example/d2l/api/le/1.98/999/dropbox/folders/11',{}),e=>e.status===403&&!e.message.includes('SECRET'));
+});
+
+test('documented optional missing settings do not block preview or invent defaults', async () => {
+  const {writer,current,calls}=setup();
+  for (const key of ['IsHidden','IsAnonymous','DropboxType','SubmissionType','CompletionType','GradeItemId','AllowOnlyUsersWithSpecialAccess','Assessment','SubmissionRule']) delete current[key];
+  const result=await writer.updateActivityDates(request);
+  assert.equal(result.status,'updated');
+  const payload=calls[1].payload;
+  assert.equal(payload.SubmissionRule,null);
+  for (const key of ['Assessment','GradeItemId','AllowOnlyUsersWithSpecialAccess','IsHidden']) assert.equal(Object.hasOwn(payload,key),false);
+});
+test('missing required field names are reported without native data', async () => {
+  const {writer,current,calls}=setup(); delete current.NotificationEmail; delete current.CustomInstructions;
+  const result=await writer.updateActivityDates(request);
+  assert.deepEqual(result.error.fields,['NotificationEmail','CustomInstructions']);
+  assert.match(result.error.message,/NotificationEmail, CustomInstructions/);
+  assert.equal(result.writeAttempted,false);assert.equal(calls.length,1);
 });

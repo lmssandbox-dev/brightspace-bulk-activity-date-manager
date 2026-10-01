@@ -26,3 +26,19 @@ test('authenticated transport rejects foreign origins and HTTP before accessing 
   await assert.rejects(() => get('http://tenant.example/d2l/api/le/1.90/999/quizzes/'));
   assert.equal(calls, 0);
 });
+
+const { hasScope } = require('../src/brightspace/client');
+test('scope matching accepts explicit, wildcard and action-list permissions', () => {
+  for (const scope of ['dropbox:folders:write','dropbox:folders:*','dropbox:*:*','dropbox:*:write',
+    'dropbox:folders:read,write','quizzing:*:*  dropbox:*:*\ncontent:*:*','  dropbox:folders:write  ']) {
+    assert.equal(hasScope(scope,'dropbox:folders:write'),true,scope);
+  }
+});
+test('scope matching rejects read-only, unrelated, malformed and universal-looking grants', () => {
+  for (const scope of [undefined,null,{},'', 'dropbox:folders:read','dropbox:folders:readonly','quizzing:*:*',
+    'core:*:*','*:*:*','dropbox:folders:writeExtra','dropbox:folders:write,','dropbox:folders:*,read',
+    'dropbox:folders:read, write','dropbox:folders:write:extra','dropbox:other:write']) {
+    assert.equal(hasScope(scope,'dropbox:folders:write'),false,String(scope));
+  }
+  assert.equal(hasScope('dropbox:*:*','dropbox:folders:*'),false);
+});

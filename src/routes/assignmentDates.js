@@ -35,7 +35,7 @@ function createAssignmentDates({ writer, deploymentId, writeEnabled = false, now
   function form(res, courseId = '') {
     return `<hr><h2>Assignment date test — 01C</h2>
       <p>Update one Assignment. Times are Brasília time (America/Sao_Paulo, UTC−03:00).</p>
-      ${writeEnabled ? '' : '<p>Preview is available. Applying requires dropbox:folders:write in the OAuth registration and D2L_OAUTH2_SCOPES.</p>'}
+      ${writeEnabled ? '' : '<p>Preview is available. Applying requires dropbox:folders:write or a covering wildcard (dropbox:folders:* or dropbox:*:*) in the OAuth registration and D2L_OAUTH2_SCOPES.</p>'}
       <form method="post" action="/diagnostics/assignment-dates/preview">
         ${hidden('ltik',res.locals.ltik)}${hidden('ticket',issue(res,'form'))}
         <p><label>Course Offering ID <input name="orgUnitId" pattern="[1-9][0-9]*" required value="${escape(courseId)}"></label>

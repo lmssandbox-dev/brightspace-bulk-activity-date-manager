@@ -6,7 +6,7 @@ require('dotenv').config();
 const axios = require('axios');
 const { createBrightspaceAuth } = require('./src/brightspace/auth');
 const { databaseConfig } = require('./src/config/database');
-const { createBrightspaceClient, createBrightspaceGet, createAssignmentPut } = require('./src/brightspace/client');
+const { createBrightspaceClient, createBrightspaceGet, createAssignmentPut, hasScope } = require('./src/brightspace/client');
 const { createAssignmentsClient } = require('./src/brightspace/activities/assignments');
 const { createQuizzesClient } = require('./src/brightspace/activities/quizzes');
 const { createDiscussionsClient } = require('./src/brightspace/activities/discussions');
@@ -137,7 +137,7 @@ const discovery = createActivityDiscovery({
 const assignmentDates = createAssignmentDates({
   writer: createAssignmentWriter({ api: brightspace, put: createAssignmentPut({ http: axios, oauth, leRoot }) }),
   deploymentId: BS_DEPLOYMENT_ID,
-  writeEnabled: D2L_OAUTH2_SCOPES.split(/\s+/).includes('dropbox:folders:write')
+  writeEnabled: hasScope(D2L_OAUTH2_SCOPES, 'dropbox:folders:write')
 });
 const diagnostics = createDiagnostics({
   assignmentForm: assignmentDates.form,

@@ -101,3 +101,9 @@ Enter Course Offering ID `9524` and Assignment ID `983`. Enter three Brasília d
 Applying requires `dropbox:folders:write` in the Brightspace OAuth registration and Render's `D2L_OAUTH2_SCOPES`, plus Service User edit permissions. Keep existing read scopes. Without the configured write scope, preview remains available but Apply is not offered. Restart after environment changes.
 
 Confirmation tickets last ten minutes and are bound to the LTI session. This diagnostic uses in-memory tickets for a single-instance deployment. A restart or a request reaching another instance requires a fresh launch/preview. Production bulk execution needs persistent job state. No live dates were changed during implementation.
+
+### Explicit and wildcard scopes
+
+The web form and Assignment CLI share a scope matcher. For Assignment writes it accepts `dropbox:folders:write`, `dropbox:folders:*`, `dropbox:*:*`, and action lists such as `dropbox:folders:read,write`. Scope entries are separated by whitespace. Matching is exact within each component; unrelated scopes, read-only grants and `core:*:*` alone do not enable this local write control.
+
+The matching scope must be in the app's `D2L_OAUTH2_SCOPES`, not only the Brightspace registration. This controls the local UI/CLI gate; Brightspace still enforces token grants and Service User permissions. OAuth scope requests and credentials are unchanged.

@@ -146,3 +146,20 @@ function createAssignmentPut({ http, oauth, leRoot }) {
   };
 }
 module.exports.createAssignmentPut = createAssignmentPut;
+
+// Local configuration check; Brightspace still enforces granted scopes and user permissions.
+// Resource-group names must match: core:*:* is not treated as a universal grant.
+function hasScope(scopes, required) {
+  if (typeof scopes !== 'string' || typeof required !== 'string') return false;
+  const target = required.split(':');
+  if (target.length !== 3 || target.some(part => !/^[A-Za-z][A-Za-z0-9]*$/.test(part))) return false;
+  return scopes.trim().split(/\s+/).some(scope => {
+    const parts = scope.split(':');
+    if (parts.length !== 3 || parts[0] !== target[0]) return false;
+    if (parts[1] !== '*' && parts[1] !== target[1]) return false;
+    if (parts[2] === '*') return true;
+    const actions = parts[2].split(',');
+    return actions.every(action => /^[A-Za-z][A-Za-z0-9]*$/.test(action)) && actions.includes(target[2]);
+  });
+}
+module.exports.hasScope = hasScope;

@@ -60,7 +60,7 @@ The runner assumes the operator supplied Course Offering IDs; type resolution is
 
 Contract: `createAssignmentWriter({api, put}).updateActivityDates({orgUnitId, activity, dates, dryRun})`. Activity must identify an Assignment and, if supplied, its key/course must agree. `dates` requires start, due and end timezone-aware instants, ordered without losing sub-millisecond precision. The CLI defaults to dryRun; internal calls default to execution.
 
-The payload explicitly maps DropboxFolder to DropboxFolderUpdateData, converts RichText instructions to RichTextInput, retains availability types, and includes SubmissionRule for LE >=1.98. It does not replay read-only fields. Missing preservation settings, null/unknown availability types, or permission-limited special-access settings block the write rather than applying defaults. An undated Assignment is supported when its availability types are known. This restriction needs validation against the real tenant before broad execution.
+The payload explicitly maps DropboxFolder to DropboxFolderUpdateData, converts RichText instructions to RichTextInput, retains availability types, and includes SubmissionRule for LE >=1.98. It does not replay read-only fields. Missing core preservation settings or null/unknown availability types block the write rather than applying defaults. Fields documented to preserve their current value when omitted are not required in the read response. An undated Assignment is supported when its availability types are known. This restriction needs validation against the real tenant before broad execution.
 
 The Assignment-only transport restricts PUT URLs to the configured HTTPS tenant, LE version and native Assignment detail path. It uses the existing OAuth cache, a timeout and no redirects. No automatic PUT retries occur. After any PUT outcome, the writer reads back; requested dates and writable non-date settings must match before returning updated. A failed verification has `writeAttempted: true`; it does not imply the original write was rolled back. A lost response followed by successful verification returns updated with `reconciled: true`.
 
@@ -77,3 +77,13 @@ Sources checked October 1, 2026: [Assignment read/update contract](https://docs.
 Date-time inputs use explicit Brasília UTC−03:00 with IANA timezone round-trip validation. Now captures one instant at preview time, fixed through apply. Results are escaped, non-cacheable and use no-referrer policy. Scope availability is enforced server-side. No raw Brightspace payload is accepted from the browser.
 
 The bounded in-memory tickets target single-instance testing, not distributed production execution. Restarts or another instance invalidate a confirmation. Browser/live acceptance on Render remains pending deployment.
+
+### Optional Assignment fields
+
+The writer no longer requires every documented read property to be present. Missing IsHidden, IsAnonymous, DropboxType, SubmissionType, CompletionType, GradeItemId, AllowOnlyUsersWithSpecialAccess and Assessment are omitted under the documented preserve-current update semantics. At LE >=1.98, missing SubmissionRule is sent as null (documented leave-unchanged behavior). Core fields without that guarantee still block writes, now reporting their names in `error.fields` and the message. No defaults are guessed. Exact fields missing from the reported tenant response were not supplied, so live resolution still needs preview verification.
+
+### Explicit and wildcard scopes
+
+The web form and Assignment CLI share a scope matcher. For Assignment writes it accepts `dropbox:folders:write`, `dropbox:folders:*`, `dropbox:*:*`, and action lists such as `dropbox:folders:read,write`. Scope entries are separated by whitespace. Matching is exact within each component; unrelated scopes, read-only grants and `core:*:*` alone do not enable this local write control.
+
+The matching scope must be in the app's `D2L_OAUTH2_SCOPES`, not only the Brightspace registration. This controls the local UI/CLI gate; Brightspace still enforces token grants and Service User permissions. OAuth scope requests and credentials are unchanged.

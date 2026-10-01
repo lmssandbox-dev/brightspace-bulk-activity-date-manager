@@ -2,7 +2,7 @@
 // Explicit single-Assignment operator tool. No frontend route or bulk execution.
 const { id } = require('../src/brightspace/id');
 const { createBrightspaceAuth } = require('../src/brightspace/auth');
-const { createBrightspaceClient, createBrightspaceGet, createAssignmentPut } = require('../src/brightspace/client');
+const { createBrightspaceClient, createBrightspaceGet, createAssignmentPut, hasScope } = require('../src/brightspace/client');
 const { createAssignmentWriter, validateDates } = require('../src/brightspace/assignmentWriter');
 async function main() {
   const args = process.argv.slice(2);
@@ -13,7 +13,7 @@ async function main() {
   const http=require('axios'), env=process.env;
   const leRoot=`${env.BS_URL}/d2l/api/le/${env.D2L_LE_VERSION}`;
   const apply=args[5]==='--apply';
-  if (apply && !env.D2L_OAUTH2_SCOPES?.split(/\s+/).includes('dropbox:folders:write')) throw new Error('scope');
+  if (apply && !hasScope(env.D2L_OAUTH2_SCOPES, 'dropbox:folders:write')) throw new Error('scope');
   const oauth=createBrightspaceAuth({http,clientId:env.D2L_OAUTH2_CLIENT_ID,scope:env.D2L_OAUTH2_SCOPES,
     kid:env.D2L_OAUTH2_KEY_ID,privateKeyPem:env.D2L_OAUTH2_PRIVATE_KEY,tokenEndpoint:env.D2L_OAUTH2_TOKEN_ENDPOINT});
   const api=createBrightspaceClient({leRoot,get:createBrightspaceGet({http,oauth,baseUrl:env.BS_URL})});
