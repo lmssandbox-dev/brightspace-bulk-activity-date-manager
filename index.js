@@ -6,12 +6,13 @@ require('dotenv').config();
 const axios = require('axios');
 const { createBrightspaceAuth } = require('./src/brightspace/auth');
 const { databaseConfig } = require('./src/config/database');
-const { createBrightspaceClient, createBrightspaceGet, createAssignmentPut, hasScope } = require('./src/brightspace/client');
+const { createBrightspaceClient, createBrightspaceGet, createAssignmentPut, createActivityPut, hasScope } = require('./src/brightspace/client');
 const { createAssignmentsClient } = require('./src/brightspace/activities/assignments');
 const { createQuizzesClient } = require('./src/brightspace/activities/quizzes');
 const { createDiscussionsClient } = require('./src/brightspace/activities/discussions');
 const { createActivityDiscovery } = require('./src/services/activityDiscovery');
 const { createDiagnostics } = require('./src/routes/discoveryDiagnostics');
+const { createNativeWriter } = require('./src/brightspace/nativeWriters');
 const { createAssignmentWriter } = require('./src/brightspace/assignmentWriter');
 const { createAssignmentDates } = require('./src/routes/assignmentDates');
 const lti = require('ltijs').Provider;
@@ -135,9 +136,13 @@ const discovery = createActivityDiscovery({
   discussions: createDiscussionsClient(brightspace)
 });
 const assignmentDates = createAssignmentDates({
-  writer: createAssignmentWriter({ api: brightspace, put: createAssignmentPut({ http: axios, oauth, leRoot }) }),
+  writers: {
+    assignment: createAssignmentWriter({ api: brightspace, put: createAssignmentPut({ http: axios, oauth, leRoot }) }),
+    quiz: createNativeWriter({ api: brightspace, type: 'quiz', put: createActivityPut({ http: axios, oauth, leRoot, type: 'quiz' }) }),
+    discussionTopic: createNativeWriter({ api: brightspace, type: 'discussionTopic', put: createActivityPut({ http: axios, oauth, leRoot, type: 'discussionTopic' }) })
+  },
   deploymentId: BS_DEPLOYMENT_ID,
-  writeEnabled: hasScope(D2L_OAUTH2_SCOPES, 'dropbox:folders:write')
+  writeEnabled: type => hasScope(D2L_OAUTH2_SCOPES, { assignment: 'dropbox:folders:write', quiz: 'quizzing:quizzes:write', discussionTopic: 'discussions:topics:manage' }[type])
 });
 const diagnostics = createDiagnostics({
   assignmentForm: assignmentDates.form,

@@ -8,7 +8,7 @@ Scope reset accepted October 1, 2026. This document governs future V1 work; the 
 
 Apply one selected Start, Due and End instant to every Assignment, Quiz and Discussion Topic in each Course Offering listed in a CSV. Courses already contain their activities, populated upstream by the SIS/content-copy process. Process courses independently; there is no equivalent-activity matching across courses.
 
-The intended UI is CSV upload plus three date/time pickers, validation summary, confirmation and results. Final UI is not implemented. The Assignment writer is implemented locally; live verification is pending.
+The intended UI is CSV upload plus three date/time pickers, validation summary, confirmation and results. Final UI is not implemented. All three writers are implemented locally; Assignment is live-tested, Quiz and Discussion Topic live verification is pending.
 
 ### Impact assessment
 
@@ -70,7 +70,7 @@ Scope authority: [V1 product scope](#v1-product-scope-and-architecture), accepte
 | Stage | Status / deliverable | Completion evidence |
 |---|---|---|
 | 01A — LTI + server-to-server authentication | COMPLETE; retain architecture | Existing authentication, token-cache and deployment/database guard coverage |
-| 01C — Safe native date writers | IN PROGRESS: Assignment writer, fixture tests and protected preview/apply form implemented; live verification pending. Quiz and Discussion Topic writers next | Valid full update mappings, preservation fixtures, all three dates, null existing dates, unchanged detection, read-back mismatch and error tests; explicitly authorized controlled live write verification |
+| 01C — Safe native date writers | IN PROGRESS: Assignment live write confirmed by user, with writes occurring only after Apply. Quiz and Discussion Topic writers implemented locally; live acceptance pending | Valid full update mappings, preservation fixtures, all three dates, null existing dates, unchanged detection, read-back mismatch and error tests; explicitly authorized controlled live write verification |
 | 01D — CSV + Course Offering resolution | Planned | Explicit schema, row diagnostics, ID/code lookup, type/access checks, ambiguous/unknown codes, blanks, duplicates including ID/code aliases |
 | 01E — Bulk execution engine | Planned | Durable server-side plan/job/results, validation-before-write barrier, confirmation binding, bounded concurrency, retry caps, partial failures, read-back verification and reruns |
 | 01F — Minimal production UI | Planned | CSV + three date/time inputs, explicit timezone, validation summary, Cancel/Apply Dates, job progress/results and downloadable report |
@@ -88,3 +88,7 @@ Scope authority: [V1 product scope](#v1-product-scope-and-architecture), accepte
 - 01D: exact code lookup capability and duplicate-code policy; propose rejecting ambiguous resolution.
 - 01E: job storage, queue/worker lifecycle, cancellation/resume, concurrent overlapping jobs, retry/concurrency defaults and plan freshness. Proposed default blocks execution on validation errors; any valid-subset mode must be explicit.
 - 01F: institution timezone source, DST disambiguation, size limits and access restrictions. No ambiguous missing-date behavior: all three dates are required in V1.
+
+### Current 01C acceptance
+
+Assignment: user confirmed successful live date updates and that Preview alone makes no changes. Quiz and Discussion Topic: fixture tests pass; deploy and test one known native activity of each type, check preservation in the LMS, and rerun identical dates for unchanged. Discussion calendar-field availability is an unresolved compatibility check. Do not mark 01C complete or start bulk execution until these checks pass.

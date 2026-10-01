@@ -51,5 +51,17 @@ test('discovery launch includes the Assignment form without executing writer',()
  const s=setup(),res=response();
  const {createDiagnostics}=require('../src/routes/discoveryDiagnostics');
  const d=createDiagnostics({client:{},deploymentId:'d',assignmentForm:s.routes.form});d.launch(res.locals.token,{},res);
- assert.match(res.body,/Assignment date test/);assert.match(res.body,/Preview selected dates/);assert.equal(s.calls.length,0);
+ assert.match(res.body,/Activity date test/);assert.match(res.body,/Preview selected dates/);assert.equal(s.calls.length,0);
+});
+
+test('form routes each activity type and enforces its own scope and preview identity',async()=>{
+ for(const type of ['quiz','discussionTopic']){
+  const calls=[];const writer={async updateActivityDates(data){calls.push(data);return {status:data.dryRun?'ready':'updated',type,activityKey:`${type}:9524:11`,requestedDates:data.dates,verifiedDates:data.dates};}};
+  const routes=createAssignmentDates({writers:{[type]:writer},deploymentId:'d',writeEnabled:t=>t===type});
+  const res=response();await routes.preview({body:{ticket:ticket(routes.form(res)),type,activityId:'11',parentId:'31',orgUnitId:'9524',mode:'selected',start:'2027-01-01T09:00',due:'2027-01-02T09:00',end:'2027-01-03T09:00'}},res);
+  assert.match(res.body,/Apply these dates/);
+  await routes.apply({body:{ticket:ticket(res.body),type:'assignment',activityId:'999'}},response());
+  assert.equal(calls.length,2);assert.equal(calls[1].activity.type,type);assert.equal(calls[1].activity.id,'11');
+  if(type==='discussionTopic')assert.equal(calls[1].activity.parentId,'31');
+ }
 });

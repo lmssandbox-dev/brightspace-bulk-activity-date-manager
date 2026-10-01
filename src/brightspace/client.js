@@ -120,7 +120,14 @@ module.exports = { createBrightspaceClient, createBrightspaceGet };
 Object.assign(module.exports, { MINIMUM_LE_VERSION, atLeast, validateLeRoot, ApiReadError, apiWarning });
 
 // Deliberately limited to Assignment detail PUTs; diagnostics still use GET only.
-function createAssignmentPut({ http, oauth, leRoot }) {
+function createAssignmentPut(options) { return createActivityPut({ ...options, type: 'assignment' }); }
+function createActivityPut({ http, oauth, leRoot, type }) {
+  const routes = {
+    assignment: /^\/[1-9]\d*\/dropbox\/folders\/[1-9]\d*$/,
+    quiz: /^\/[1-9]\d*\/quizzes\/[1-9]\d*$/,
+    discussionTopic: /^\/[1-9]\d*\/discussions\/forums\/[1-9]\d*\/topics\/[1-9]\d*$/
+  };
+  if (!Object.hasOwn(routes, type)) throw new Error('Unsupported activity type');
   validateLeRoot(leRoot);
   const root = new URL(leRoot);
   if (root.protocol !== 'https:' || root.username || root.password || root.search || root.hash) throw new Error('Invalid API root');
@@ -128,8 +135,8 @@ function createAssignmentPut({ http, oauth, leRoot }) {
     const url = new URL(path);
     const suffix = url.pathname.slice(root.pathname.length);
     if (url.origin !== root.origin || url.username || url.password || url.search || url.hash ||
-        !url.pathname.startsWith(root.pathname) || !/^\/[1-9]\d*\/dropbox\/folders\/[1-9]\d*$/.test(suffix)) {
-      throw new Error('Only configured Assignment detail URLs can be updated');
+        !url.pathname.startsWith(root.pathname) || !routes[type].test(suffix)) {
+      throw new Error('Only configured native activity detail URLs can be updated');
     }
     let token;
     try { token = await oauth.getAccessToken(); }
@@ -139,7 +146,7 @@ function createAssignmentPut({ http, oauth, leRoot }) {
         headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
       return response.data;
     } catch (error) {
-      const safe = new Error('Assignment API update failed');
+      const safe = new Error('Activity API update failed');
       safe.status = Number.isInteger(error.response?.status) ? error.response.status : null;
       throw safe;
     }
@@ -163,3 +170,5 @@ function hasScope(scopes, required) {
   });
 }
 module.exports.hasScope = hasScope;
+
+module.exports.createActivityPut = createActivityPut;

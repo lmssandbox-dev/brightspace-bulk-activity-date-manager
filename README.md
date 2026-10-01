@@ -1,6 +1,6 @@
 # Brightspace Bulk Activity Date Manager
 
-This project focuses on Course Offerings and three native activity types: Assignments, Quizzes and Discussion Topics. The LTI application provides discovery plus a single-Assignment preview/apply test form. A single-Assignment operator CLI is also available. Quiz/Discussion writers, CSV ingestion and bulk execution are not implemented.
+This project focuses on Course Offerings and three native activity types: Assignments, Quizzes and Discussion Topics. The LTI application provides discovery plus an Assignment, Quiz and Discussion Topic preview/apply test form. A single-Assignment operator CLI is also available. Quiz and Discussion Topic writers are implemented locally; live acceptance is pending. CSV ingestion and bulk execution are not implemented.
 
 The original Brightspace Activity Date Manager folder retains the full 01A/01B baseline. This separate project no longer contains Source Course helpers, Content discovery, hierarchy or relationship resolution. Forums are read only to enumerate Discussion Topics. Secrets were not copied; configure them separately. LTI, OAuth and database identifiers are unchanged by the folder rename.
 
@@ -107,3 +107,15 @@ Confirmation tickets last ten minutes and are bound to the LTI session. This dia
 The web form and Assignment CLI share a scope matcher. For Assignment writes it accepts `dropbox:folders:write`, `dropbox:folders:*`, `dropbox:*:*`, and action lists such as `dropbox:folders:read,write`. Scope entries are separated by whitespace. Matching is exact within each component; unrelated scopes, read-only grants and `core:*:*` alone do not enable this local write control.
 
 The matching scope must be in the app's `D2L_OAUTH2_SCOPES`, not only the Brightspace registration. This controls the local UI/CLI gate; Brightspace still enforces token grants and Service User permissions. OAuth scope requests and credentials are unchanged.
+
+## 01C — Quiz and Discussion Topic testing
+
+The LTI test form now includes **Activity type**, **Activity ID** and **Forum ID** (Discussion Topic only). Use discovery's `id` and `parentId` to identify a Discussion Topic. Course Offering ID remains explicit. Preview never writes; Apply uses the exact previewed request and performs read-back verification.
+
+- Quiz scope: `quizzing:quizzes:write` or a covering wildcard.
+- Discussion Topic scope: `discussions:topics:manage` or a covering wildcard.
+- Assignment scope remains `dropbox:folders:write` or a covering wildcard.
+
+Set scopes in both the OAuth registration and Render environment. Deploy updated `index.js` and all of `src/`, then relaunch through the LMS. Use ordered dates with Due strictly later than Start for Discussion Topics; the all-dates-now option does not meet that API rule.
+
+The Assignment write has been confirmed live by the user, including Apply-only mutation. Quiz and Discussion Topic live tests are still pending. The Discussion read contract may omit calendar-display settings; this implementation blocks rather than defaulting those settings. If preview reports `DisplayInCalendar` or `DisplayUnlockDatesInCalendar` missing, provide the error for investigation; no update is sent.

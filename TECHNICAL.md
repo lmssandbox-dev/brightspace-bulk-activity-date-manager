@@ -1,6 +1,6 @@
 # Technical reference
 
-Current discovery, future native write requirements and verification procedures. The Assignment writer is implemented; Quiz and Discussion Topic writers remain planned.
+Current discovery, future native write requirements and verification procedures. All three native writers are implemented locally. Assignment is live-tested; Quiz and Discussion Topic live acceptance is pending.
 
 ## Native discovery contract — schemaVersion 3
 
@@ -46,7 +46,7 @@ All paths below are relative to `/d2l/api/le/{version}/{orgUnitId}/`. Every deta
 
 Assignment date payload fields are `Availability.StartDate`, `Availability.EndDate`, their availability types, and `DueDate`. Quizzes use `StartDate`, `DueDate`, `EndDate`. Discussion Topics use `StartDate`, `DueDate`, `EndDate` and availability types at LE >=1.90. Preserve the non-date groups described above. Explicit nulls can clear dates; omitted fields must never be assumed to preserve current state in a PUT replacement contract.
 
-Check the configured version against the official [scope inventory](https://docs.valence.desire2learn.com/http-scopestable.html) and the resource contracts linked above when implementing 01C. An Assignment adapter now exists; the other two remain planned.
+Check the configured version against the official [scope inventory](https://docs.valence.desire2learn.com/http-scopestable.html) and the resource contracts linked above when implementing 01C. An Assignment adapter now exists; the Quiz and Discussion Topic adapters are now implemented too.
 
 ## Native-only discovery acceptance
 
@@ -87,3 +87,17 @@ The writer no longer requires every documented read property to be present. Miss
 The web form and Assignment CLI share a scope matcher. For Assignment writes it accepts `dropbox:folders:write`, `dropbox:folders:*`, `dropbox:*:*`, and action lists such as `dropbox:folders:read,write`. Scope entries are separated by whitespace. Matching is exact within each component; unrelated scopes, read-only grants and `core:*:*` alone do not enable this local write control.
 
 The matching scope must be in the app's `D2L_OAUTH2_SCOPES`, not only the Brightspace registration. This controls the local UI/CLI gate; Brightspace still enforces token grants and Service User permissions. OAuth scope requests and credentials are unchanged.
+
+## Quiz and Discussion Topic implementation
+
+`src/brightspace/nativeWriters.js` contains explicit resource payload builders and the common read/validate/write/read-back flow for Quiz and Discussion Topic. It reuses requested-date validation from the Assignment writer. The proven Assignment path remains unchanged. `createActivityPut` restricts each transport instance to one native resource path; the Assignment transport remains a wrapper with its original restriction.
+
+Quiz mapping converts all four RichText containers and maps AttemptsAllowed to NumberOfAttemptsAllowed. It preserves timing, access, password, grading, paging and display settings. IsSingleSession is required from LE 1.92; AnnotationToolsEnabled from 1.98. Missing full-PUT preservation fields fail with named diagnostics. The Service User must have sufficient access to see the real settings, including passwords/email; a permission-hidden null cannot be distinguished from an unset value solely from the read contract. Verify this permission configuration before production use.
+
+Discussion Topic identity includes both native TopicId and ForumId. Dates must satisfy Start < Due <= End. Availability types, group association, description, scoring, participation, moderation and calendar fields are preserved. Calendar fields are required conservatively: the documented Topic read shape does not advertise them, and update defaults must not be guessed. This is an explicit live compatibility limitation pending inspection of actual tenant responses, not a completed live acceptance claim. No Forum update or fallback Content write exists.
+
+Both writers return ready, unchanged, updated or failed. They reconcile uncertain PUT outcomes by reading, never blindly retry, and compare mapped non-date settings before reporting success. Secrets remain server-side and are not included in structured results. Full-PUT concurrency limitations remain; this test tool does not implement locking or production jobs.
+
+The existing test route now dispatches a fixed whitelist of three types. Scope checks occur per type at both preview and apply, and confirmation tickets retain type, native ID, parent ID and dates server-side. Client alterations at apply cannot redirect the approved request. Existing route URLs are retained for deployment compatibility.
+
+Contracts consulted: [QuizData](https://docs.valence.desire2learn.com/res/quiz.html#Quiz.QuizData) and [CreateTopicData](https://docs.valence.desire2learn.com/res/discuss.html#Discussions.CreateTopicData). Fixture tests cover mapping, version fields, null dates, unchanged reruns, incomplete reads, parent/type mismatch, verification failures, uncertain writes and type-restricted transport.
