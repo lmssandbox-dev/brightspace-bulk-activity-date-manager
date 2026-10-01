@@ -1,6 +1,6 @@
 # Brightspace Bulk Activity Date Manager
 
-This project focuses on Course Offerings and three native activity types: Assignments, Quizzes and Discussion Topics. The LTI application provides authenticated, read-only discovery. A single-Assignment date writer is now available through an operator CLI. Quiz/Discussion writers, CSV ingestion and bulk execution are not implemented.
+This project focuses on Course Offerings and three native activity types: Assignments, Quizzes and Discussion Topics. The LTI application provides discovery plus a single-Assignment preview/apply test form. A single-Assignment operator CLI is also available. Quiz/Discussion writers, CSV ingestion and bulk execution are not implemented.
 
 The original Brightspace Activity Date Manager folder retains the full 01A/01B baseline. This separate project no longer contains Source Course helpers, Content discovery, hierarchy or relationship resolution. Forums are read only to enumerate Discussion Topics. Secrets were not copied; configure them separately. LTI, OAuth and database identifiers are unchanged by the folder rename.
 
@@ -80,7 +80,7 @@ See [PLAN.md](PLAN.md) for scope and implementation sequence, and [TECHNICAL.md]
 
 ## 01C — single Assignment dates
 
-`src/brightspace/assignmentWriter.js` reads the native Assignment, validates all three requested dates, preserves settings, updates and verifies. The existing LTI routes remain read-only. This operator command uses the configured Service User directly and is not a public endpoint.
+`src/brightspace/assignmentWriter.js` reads the native Assignment, validates all three requested dates, preserves settings, updates and verifies. The discovery route remains read-only; the Assignment test form has separate protected POST routes. This operator command uses the configured Service User directly and is not a public endpoint.
 
 After installing dependencies and configuring `.env`, preview without writing:
 
@@ -91,3 +91,13 @@ npm run assignment:dates -- 9524 983 '2027-01-01T09:00:00-03:00' '2027-01-02T23:
 Those are example dates, not approved live-test values. Append `--apply` only when the target and dates are intended. Register `dropbox:folders:write` and include it in the operator environment's OAuth scopes for an apply run; retain the necessary read scopes and Service User permissions. No registration, scopes or live data were changed during implementation.
 
 The result is `ready` (dry run), `unchanged`, `updated` (verified), or `failed`, with requested/verified dates and a sanitized error. Unknown availability semantics block an update. See [TECHNICAL.md](TECHNICAL.md) for limits and live acceptance.
+
+## Assignment test form on Render
+
+Deploy the updated `index.js` and complete `src/` folder, then relaunch through Brightspace. The page includes **Assignment date test — 01C** below discovery.
+
+Enter Course Offering ID `9524` and Assignment ID `983`. Enter three Brasília date-times, or use **Preview current Brasília time for all dates**. Review the result, then choose **Apply these dates**. Equal start/end dates create a zero-duration availability window. Preview makes no writes; apply uses exactly the previewed dates and re-reads/verifies the Assignment.
+
+Applying requires `dropbox:folders:write` in the Brightspace OAuth registration and Render's `D2L_OAUTH2_SCOPES`, plus Service User edit permissions. Keep existing read scopes. Without the configured write scope, preview remains available but Apply is not offered. Restart after environment changes.
+
+Confirmation tickets last ten minutes and are bound to the LTI session. This diagnostic uses in-memory tickets for a single-instance deployment. A restart or a request reaching another instance requires a fresh launch/preview. Production bulk execution needs persistent job state. No live dates were changed during implementation.

@@ -16,7 +16,7 @@ Pagination, strict dates, secret redaction and partial resource failure reportin
 
 V1 targets are Assignment, Quiz and Discussion Topic only. Assignment implementation is described below.
 
-The discovery routes remain read-only; the operator Assignment command can issue a PUT with explicitly configured write scope. The domain model is intentionally insufficient to reconstruct complete Brightspace update bodies. A future writer must re-read the current native object, map it to the configured API version's update contract, preserve unrelated fields and availability semantics, apply only requested changes, write, then re-read and verify. Never use a Content placement to update a native Assignment/Quiz/Discussion. Never accept a complete native payload from a browser.
+Discovery remains read-only; the protected Assignment form and operator command can issue PUT with explicitly configured write scope. The domain model is intentionally insufficient to reconstruct complete Brightspace update bodies. A future writer must re-read the current native object, map it to the configured API version's update contract, preserve unrelated fields and availability semantics, apply only requested changes, write, then re-read and verify. Never use a Content placement to update a native Assignment/Quiz/Discussion. Never accept a complete native payload from a browser.
 
 The V1 request identifies a canonical activity and requires all three dates. Missing/null requested dates are rejected; date clearing and partial date updates are not implemented. Validate identity, authorization, dates and ordering at write time. Re-reading reduces stale-data risk but does not make concurrent edits atomic; concurrency/version handling remains a 01C design task.
 
@@ -69,3 +69,11 @@ Returned settings are compared conservatively; server-side formatting changes ca
 Live acceptance target supplied by the user: Course Offering **9524**, Assignment **983**. Requested dates/timezone are still pending. Local code has no configured credentials/dependencies; the operator command must run in a configured environment. No live update has been performed. Run dry first, inspect the result, apply the intended values, then rerun to verify unchanged; manually confirm instructions, grading, visibility and availability in the LMS. Quiz and Discussion Topic writers follow once this writer is accepted.
 
 Sources checked October 1, 2026: [Assignment read/update contract](https://docs.valence.desire2learn.com/res/dropbox.html#Dropbox.DropboxFolderUpdateData) and [RichTextInput](https://docs.valence.desire2learn.com/basic/conventions.html#term-RichTextInput).
+
+## LTI Assignment test form
+
+`src/routes/assignmentDates.js` provides protected POST preview/apply handlers. Both check the validated ltijs session and deployment. Forms carry the LTI token in the POST body. Random server-side tickets expire after ten minutes and are bound to a hash of the session. Apply consumes its ticket before awaiting the writer and ignores replacement IDs/dates submitted by the browser. It uses the stored preview values.
+
+Date-time inputs use explicit Brasília UTC−03:00 with IANA timezone round-trip validation. Now captures one instant at preview time, fixed through apply. Results are escaped, non-cacheable and use no-referrer policy. Scope availability is enforced server-side. No raw Brightspace payload is accepted from the browser.
+
+The bounded in-memory tickets target single-instance testing, not distributed production execution. Restarts or another instance invalidate a confirmation. Browser/live acceptance on Render remains pending deployment.

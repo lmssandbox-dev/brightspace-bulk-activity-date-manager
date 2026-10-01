@@ -6,12 +6,14 @@ require('dotenv').config();
 const axios = require('axios');
 const { createBrightspaceAuth } = require('./src/brightspace/auth');
 const { databaseConfig } = require('./src/config/database');
-const { createBrightspaceClient, createBrightspaceGet } = require('./src/brightspace/client');
+const { createBrightspaceClient, createBrightspaceGet, createAssignmentPut } = require('./src/brightspace/client');
 const { createAssignmentsClient } = require('./src/brightspace/activities/assignments');
 const { createQuizzesClient } = require('./src/brightspace/activities/quizzes');
 const { createDiscussionsClient } = require('./src/brightspace/activities/discussions');
 const { createActivityDiscovery } = require('./src/services/activityDiscovery');
 const { createDiagnostics } = require('./src/routes/discoveryDiagnostics');
+const { createAssignmentWriter } = require('./src/brightspace/assignmentWriter');
+const { createAssignmentDates } = require('./src/routes/assignmentDates');
 const lti = require('ltijs').Provider;
 
 // ===============================
@@ -132,13 +134,22 @@ const discovery = createActivityDiscovery({
   quizzes: createQuizzesClient(brightspace),
   discussions: createDiscussionsClient(brightspace)
 });
+const assignmentDates = createAssignmentDates({
+  writer: createAssignmentWriter({ api: brightspace, put: createAssignmentPut({ http: axios, oauth, leRoot }) }),
+  deploymentId: BS_DEPLOYMENT_ID,
+  writeEnabled: D2L_OAUTH2_SCOPES.split(/\s+/).includes('dropbox:folders:write')
+});
 const diagnostics = createDiagnostics({
+  assignmentForm: assignmentDates.form,
   client: discovery,
   deploymentId: BS_DEPLOYMENT_ID
 });
 lti.onConnect(diagnostics.launch);
 // Not whitelisted: ltijs validates the LTI session before this handler runs.
 lti.app.get('/diagnostics/activities', diagnostics.activities);
+// Protected POST routes; preview/apply tickets are bound to the validated LTI session.
+lti.app.post('/diagnostics/assignment-dates/preview', assignmentDates.preview);
+lti.app.post('/diagnostics/assignment-dates/apply', assignmentDates.apply);
 
 // Health-check
 lti.app.get('/ping', (req, res) => {

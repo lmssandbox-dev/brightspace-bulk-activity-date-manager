@@ -70,7 +70,7 @@ Scope authority: [V1 product scope](#v1-product-scope-and-architecture), accepte
 | Stage | Status / deliverable | Completion evidence |
 |---|---|---|
 | 01A — LTI + server-to-server authentication | COMPLETE; retain architecture | Existing authentication, token-cache and deployment/database guard coverage |
-| 01C — Safe native date writers | IN PROGRESS: Assignment writer and fixture tests implemented; live verification pending. Quiz and Discussion Topic writers next | Valid full update mappings, preservation fixtures, all three dates, null existing dates, unchanged detection, read-back mismatch and error tests; explicitly authorized controlled live write verification |
+| 01C — Safe native date writers | IN PROGRESS: Assignment writer, fixture tests and protected preview/apply form implemented; live verification pending. Quiz and Discussion Topic writers next | Valid full update mappings, preservation fixtures, all three dates, null existing dates, unchanged detection, read-back mismatch and error tests; explicitly authorized controlled live write verification |
 | 01D — CSV + Course Offering resolution | Planned | Explicit schema, row diagnostics, ID/code lookup, type/access checks, ambiguous/unknown codes, blanks, duplicates including ID/code aliases |
 | 01E — Bulk execution engine | Planned | Durable server-side plan/job/results, validation-before-write barrier, confirmation binding, bounded concurrency, retry caps, partial failures, read-back verification and reruns |
 | 01F — Minimal production UI | Planned | CSV + three date/time inputs, explicit timezone, validation summary, Cancel/Apply Dates, job progress/results and downloadable report |

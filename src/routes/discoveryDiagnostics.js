@@ -18,7 +18,7 @@ function diagnosticForm(ltik, orgUnitId = '') {
     </form>`;
 }
 
-function createDiagnostics({ client, deploymentId }) {
+function createDiagnostics({ client, deploymentId, assignmentForm = () => '' }) {
   const authorizeDeployment = deploymentGuard(deploymentId);
   function authorize(token, req, res) {
     res.set('Cache-Control', 'no-store');
@@ -31,7 +31,7 @@ function createDiagnostics({ client, deploymentId }) {
     launch(token, req, res) {
       if (!authorize(token, req, res)) return;
       // Do not assume the LTI context ID is a Brightspace OrgUnitId.
-      res.send(diagnosticForm(res.locals.ltik));
+      res.send(diagnosticForm(res.locals.ltik) + assignmentForm(res));
     },
     async activities(req, res) {
       if (!authorize(res.locals.token, req, res)) return;
@@ -41,7 +41,7 @@ function createDiagnostics({ client, deploymentId }) {
       try {
         const result = await client.discover(orgUnitId, { includeRaw: req.query.raw === '1', includeUndated: req.query.includeUndated === '1' });
         if (req.query.format === 'json') return res.json(result);
-        res.send(`${diagnosticForm(res.locals.ltik, orgUnitId)}
+        res.send(`${diagnosticForm(res.locals.ltik, orgUnitId)}${assignmentForm(res, orgUnitId)}
           <h2>Org Unit</h2><p>${escapeHtml(result.orgUnitId)} — ${result.complete ? 'Complete discovery' : 'Partial discovery'}</p>
           <pre>${escapeHtml(JSON.stringify(result.counts, null, 2))}</pre>
           <h2>Normalized activities (${result.activities.length})</h2>
