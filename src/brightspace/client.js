@@ -118,3 +118,31 @@ function redactDiagnostic(value) {
 module.exports = { createBrightspaceClient, createBrightspaceGet };
 
 Object.assign(module.exports, { MINIMUM_LE_VERSION, atLeast, validateLeRoot, ApiReadError, apiWarning });
+
+// Deliberately limited to Assignment detail PUTs; diagnostics still use GET only.
+function createAssignmentPut({ http, oauth, leRoot }) {
+  validateLeRoot(leRoot);
+  const root = new URL(leRoot);
+  if (root.protocol !== 'https:' || root.username || root.password || root.search || root.hash) throw new Error('Invalid API root');
+  return async (path, data) => {
+    const url = new URL(path);
+    const suffix = url.pathname.slice(root.pathname.length);
+    if (url.origin !== root.origin || url.username || url.password || url.search || url.hash ||
+        !url.pathname.startsWith(root.pathname) || !/^\/[1-9]\d*\/dropbox\/folders\/[1-9]\d*$/.test(suffix)) {
+      throw new Error('Only configured Assignment detail URLs can be updated');
+    }
+    let token;
+    try { token = await oauth.getAccessToken(); }
+    catch { throw new ApiReadError(401, true); }
+    try {
+      const response = await http({ method: 'PUT', url: url.href, data, timeout: 15000, maxRedirects: 0,
+        headers: { Authorization: `Bearer ${token}`, 'Content-Type': 'application/json' } });
+      return response.data;
+    } catch (error) {
+      const safe = new Error('Assignment API update failed');
+      safe.status = Number.isInteger(error.response?.status) ? error.response.status : null;
+      throw safe;
+    }
+  };
+}
+module.exports.createAssignmentPut = createAssignmentPut;

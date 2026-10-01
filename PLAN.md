@@ -8,7 +8,7 @@ Scope reset accepted October 1, 2026. This document governs future V1 work; the 
 
 Apply one selected Start, Due and End instant to every Assignment, Quiz and Discussion Topic in each Course Offering listed in a CSV. Courses already contain their activities, populated upstream by the SIS/content-copy process. Process courses independently; there is no equivalent-activity matching across courses.
 
-The intended UI is CSV upload plus three date/time pickers, validation summary, confirmation and results. Final UI and writes are not implemented yet.
+The intended UI is CSV upload plus three date/time pickers, validation summary, confirmation and results. Final UI is not implemented. The Assignment writer is implemented locally; live verification is pending.
 
 ### Impact assessment
 
@@ -41,7 +41,7 @@ Create future modules only when implementing them: resource writers in `brightsp
 
 #### Current simplification
 
-Source Course helpers, Content discovery, hierarchy and relationship resolution have been removed from this project at the user's request. The original project retains them. Native-only discovery is ready for the three V1 targets; forums serve only topic enumeration. Authentication remains unchanged. Future writes need a narrowly scoped transport and resource-specific payload preservation; no writes are implemented.
+Source Course helpers, Content discovery, hierarchy and relationship resolution have been removed from this project at the user's request. The original project retains them. Native-only discovery is ready for the three V1 targets; forums serve only topic enumeration. Authentication remains unchanged. Future writes need a narrowly scoped transport and resource-specific payload preservation; the single-Assignment writer is now implemented, with live verification pending.
 
 ### Input and planning contract
 
@@ -70,17 +70,17 @@ Scope authority: [V1 product scope](#v1-product-scope-and-architecture), accepte
 | Stage | Status / deliverable | Completion evidence |
 |---|---|---|
 | 01A — LTI + server-to-server authentication | COMPLETE; retain architecture | Existing authentication, token-cache and deployment/database guard coverage |
-| 01C — Safe native date writers | NEXT, not started: Assignment, Quiz, Discussion Topic only | Valid full update mappings, preservation fixtures, all three dates, null existing dates, unchanged detection, read-back mismatch and error tests; explicitly authorized controlled live write verification |
+| 01C — Safe native date writers | IN PROGRESS: Assignment writer and fixture tests implemented; live verification pending. Quiz and Discussion Topic writers next | Valid full update mappings, preservation fixtures, all three dates, null existing dates, unchanged detection, read-back mismatch and error tests; explicitly authorized controlled live write verification |
 | 01D — CSV + Course Offering resolution | Planned | Explicit schema, row diagnostics, ID/code lookup, type/access checks, ambiguous/unknown codes, blanks, duplicates including ID/code aliases |
 | 01E — Bulk execution engine | Planned | Durable server-side plan/job/results, validation-before-write barrier, confirmation binding, bounded concurrency, retry caps, partial failures, read-back verification and reruns |
 | 01F — Minimal production UI | Planned | CSV + three date/time inputs, explicit timezone, validation summary, Cancel/Apply Dates, job progress/results and downloadable report |
 
 ### Implementation sequence
 
-2. 01C: define requested-date validation and writer/result contracts. Confirm current tenant API payload requirements for the three targets. Add safe write transport and implement/test one writer at a time (Assignment, Quiz, Discussion Topic), retaining read-only diagnostics. Extract native-only discovery only where needed; keep native schema 3 discovery compatible. Do not build batch execution or final UI here.
-3. 01D: implement parser independently, then Course Offering lookup/validation adapter and resolver. Test numeric codes without ID inference and deduplication after resolution. These services return validation results and never update dates.
-4. 01E: implement plan construction first, then persisted job/result tracking, confirmation, bounded execution, retry/reconciliation and reruns. Target discovery includes undated activities and has no Content/Source Course dependency. Test that no write occurs before all CSV validation completes, and that concurrency stays bounded across courses.
-5. 01F: connect the minimal UI to server-side jobs, not per-activity request loops. Define institution timezone and DST behavior, production LTI access policy, upload limits, reporting and restart/resume behavior before release.
+1. 01C: define requested-date validation and writer/result contracts. Confirm current tenant API payload requirements for the three targets. Add safe write transport and implement/test one writer at a time (Assignment, Quiz, Discussion Topic), retaining read-only diagnostics. Extract native-only discovery only where needed; keep native schema 3 discovery compatible. Do not build batch execution or final UI here.
+2. 01D: implement parser independently, then Course Offering lookup/validation adapter and resolver. Test numeric codes without ID inference and deduplication after resolution. These services return validation results and never update dates.
+3. 01E: implement plan construction first, then persisted job/result tracking, confirmation, bounded execution, retry/reconciliation and reruns. Target discovery includes undated activities and has no Content/Source Course dependency. Test that no write occurs before all CSV validation completes, and that concurrency stays bounded across courses.
+4. 01F: connect the minimal UI to server-side jobs, not per-activity request loops. Define institution timezone and DST behavior, production LTI access policy, upload limits, reporting and restart/resume behavior before release.
 
 ### Decisions to settle within their owning spike
 

@@ -1,6 +1,6 @@
 # Technical reference
 
-Current discovery, future native write requirements and verification procedures. Writes remain unimplemented.
+Current discovery, future native write requirements and verification procedures. The Assignment writer is implemented; Quiz and Discussion Topic writers remain planned.
 
 ## Native discovery contract — schemaVersion 3
 
@@ -14,11 +14,11 @@ Pagination, strict dates, secret redaction and partial resource failure reportin
 
 ## Future write adapters — design notes only
 
-V1 targets are Assignment, Quiz and Discussion Topic only. No writes are implemented.
+V1 targets are Assignment, Quiz and Discussion Topic only. Assignment implementation is described below.
 
-No updates or write scopes are implemented. The domain model is intentionally insufficient to reconstruct complete Brightspace update bodies. A future writer must re-read the current native object, map it to the configured API version's update contract, preserve unrelated fields and availability semantics, apply only requested changes, write, then re-read and verify. Never use a Content placement to update a native Assignment/Quiz/Discussion. Never accept a complete native payload from a browser.
+The discovery routes remain read-only; the operator Assignment command can issue a PUT with explicitly configured write scope. The domain model is intentionally insufficient to reconstruct complete Brightspace update bodies. A future writer must re-read the current native object, map it to the configured API version's update contract, preserve unrelated fields and availability semantics, apply only requested changes, write, then re-read and verify. Never use a Content placement to update a native Assignment/Quiz/Discussion. Never accept a complete native payload from a browser.
 
-The eventual request should identify a canonical activity key and an explicit subset of date changes. Omitted changes mean leave unchanged; explicit null means clear only where that endpoint/version supports it. Validate identity, authorization, dates and ordering at write time. Re-reading reduces stale-data risk but does not make concurrent edits atomic; concurrency/version handling remains a 01C design task.
+The V1 request identifies a canonical activity and requires all three dates. Missing/null requested dates are rejected; date clearing and partial date updates are not implemented. Validate identity, authorization, dates and ordering at write time. Re-reading reduces stale-data risk but does not make concurrent edits atomic; concurrency/version handling remains a 01C design task.
 
 ### Native tools
 
@@ -46,7 +46,7 @@ All paths below are relative to `/d2l/api/le/{version}/{orgUnitId}/`. Every deta
 
 Assignment date payload fields are `Availability.StartDate`, `Availability.EndDate`, their availability types, and `DueDate`. Quizzes use `StartDate`, `DueDate`, `EndDate`. Discussion Topics use `StartDate`, `DueDate`, `EndDate` and availability types at LE >=1.90. Preserve the non-date groups described above. Explicit nulls can clear dates; omitted fields must never be assumed to preserve current state in a PUT replacement contract.
 
-Check the configured version against the official [scope inventory](https://docs.valence.desire2learn.com/http-scopestable.html) and the resource contracts linked above when implementing 01C. No write adapter exists in this spike.
+Check the configured version against the official [scope inventory](https://docs.valence.desire2learn.com/http-scopestable.html) and the resource contracts linked above when implementing 01C. An Assignment adapter now exists; the other two remain planned.
 
 ## Native-only discovery acceptance
 
@@ -55,3 +55,17 @@ Automated fixtures cover the three native types, null and individual date combin
 With installed dependencies and configured OAuth environment, run `npm run verify:discovery -- 9524` or provide multiple known Course Offering IDs. The command is read-only. It checks dated and undated examples of each native type, start/due/end-only cases, assignment availability values 0/1/2, identities and warnings. Missing matrix cases fail acceptance; an empty course is not a passing acceptance fixture.
 
 The runner assumes the operator supplied Course Offering IDs; type resolution is future 01D work. Live verification of this simplified schema 3 is pending deployment. Previous 01B live evidence and the complete auxiliary implementation remain in the original project. No Source Course run is required in this project.
+
+## Implemented Assignment writer
+
+Contract: `createAssignmentWriter({api, put}).updateActivityDates({orgUnitId, activity, dates, dryRun})`. Activity must identify an Assignment and, if supplied, its key/course must agree. `dates` requires start, due and end timezone-aware instants, ordered without losing sub-millisecond precision. The CLI defaults to dryRun; internal calls default to execution.
+
+The payload explicitly maps DropboxFolder to DropboxFolderUpdateData, converts RichText instructions to RichTextInput, retains availability types, and includes SubmissionRule for LE >=1.98. It does not replay read-only fields. Missing preservation settings, null/unknown availability types, or permission-limited special-access settings block the write rather than applying defaults. An undated Assignment is supported when its availability types are known. This restriction needs validation against the real tenant before broad execution.
+
+The Assignment-only transport restricts PUT URLs to the configured HTTPS tenant, LE version and native Assignment detail path. It uses the existing OAuth cache, a timeout and no redirects. No automatic PUT retries occur. After any PUT outcome, the writer reads back; requested dates and writable non-date settings must match before returning updated. A failed verification has `writeAttempted: true`; it does not imply the original write was rolled back. A lost response followed by successful verification returns updated with `reconciled: true`.
+
+Returned settings are compared conservatively; server-side formatting changes can produce SETTINGS_CHANGED requiring inspection. Full-object read/modify/PUT is not atomic, so concurrent human edits can still be overwritten between read and write. Use an isolated test activity; concurrent-job coordination remains future work. Rubrics/attachments are excluded from the update payload, rather than recreated. No bulk retry, rollback or exactly-once guarantee is implemented.
+
+Live acceptance target supplied by the user: Course Offering **9524**, Assignment **983**. Requested dates/timezone are still pending. Local code has no configured credentials/dependencies; the operator command must run in a configured environment. No live update has been performed. Run dry first, inspect the result, apply the intended values, then rerun to verify unchanged; manually confirm instructions, grading, visibility and availability in the LMS. Quiz and Discussion Topic writers follow once this writer is accepted.
+
+Sources checked October 1, 2026: [Assignment read/update contract](https://docs.valence.desire2learn.com/res/dropbox.html#Dropbox.DropboxFolderUpdateData) and [RichTextInput](https://docs.valence.desire2learn.com/basic/conventions.html#term-RichTextInput).

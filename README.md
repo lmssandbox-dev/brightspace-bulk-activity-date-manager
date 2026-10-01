@@ -1,6 +1,6 @@
 # Brightspace Bulk Activity Date Manager
 
-This project focuses on Course Offerings and three native activity types: Assignments, Quizzes and Discussion Topics. Current functionality is authenticated, read-only discovery. CSV ingestion, writes and bulk execution are planned, not implemented.
+This project focuses on Course Offerings and three native activity types: Assignments, Quizzes and Discussion Topics. The LTI application provides authenticated, read-only discovery. A single-Assignment date writer is now available through an operator CLI. Quiz/Discussion writers, CSV ingestion and bulk execution are not implemented.
 
 The original Brightspace Activity Date Manager folder retains the full 01A/01B baseline. This separate project no longer contains Source Course helpers, Content discovery, hierarchy or relationship resolution. Forums are read only to enumerate Discussion Topics. Secrets were not copied; configure them separately. LTI, OAuth and database identifiers are unchanged by the folder rename.
 
@@ -59,7 +59,7 @@ The native-only response uses `schemaVersion: 3`, with `orgUnitId`, `complete`, 
 - `discussions:forums:readonly`
 - `discussions:topics:readonly`
 
-Set `D2L_LE_VERSION` to a tenant-supported version >=1.90. LP version, Content scopes and Source Course scopes are no longer required. No write scopes are introduced.
+Set `D2L_LE_VERSION` to a tenant-supported version >=1.90. LP version, Content scopes and Source Course scopes are no longer required. The discovery app requires no write scopes. The separate Assignment CLI requires `dropbox:folders:write` only when applying changes.
 
 ## Organization
 
@@ -77,3 +77,17 @@ TECHNICAL.md                 data contract, safe writes and verification
 ```
 
 See [PLAN.md](PLAN.md) for scope and implementation sequence, and [TECHNICAL.md](TECHNICAL.md) for the data contract, safe-write requirements and verification.
+
+## 01C — single Assignment dates
+
+`src/brightspace/assignmentWriter.js` reads the native Assignment, validates all three requested dates, preserves settings, updates and verifies. The existing LTI routes remain read-only. This operator command uses the configured Service User directly and is not a public endpoint.
+
+After installing dependencies and configuring `.env`, preview without writing:
+
+```sh
+npm run assignment:dates -- 9524 983 '2027-01-01T09:00:00-03:00' '2027-01-02T23:59:00-03:00' '2027-01-03T23:59:00-03:00'
+```
+
+Those are example dates, not approved live-test values. Append `--apply` only when the target and dates are intended. Register `dropbox:folders:write` and include it in the operator environment's OAuth scopes for an apply run; retain the necessary read scopes and Service User permissions. No registration, scopes or live data were changed during implementation.
+
+The result is `ready` (dry run), `unchanged`, `updated` (verified), or `failed`, with requested/verified dates and a sanitized error. Unknown availability semantics block an update. See [TECHNICAL.md](TECHNICAL.md) for limits and live acceptance.
