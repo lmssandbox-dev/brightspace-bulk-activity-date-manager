@@ -23,14 +23,15 @@ function validateDates(dates) {
 }
 const sameDates = (a,b) => ['start','due','end'].every(key => instantKey(a[key]) === instantKey(b[key]));
 function buildAssignmentPayload(current, dates, supportsLeVersion) {
-  const required = [...fields, 'CustomInstructions', 'Availability', 'Assessment'];
-  if (supportsLeVersion('1.98')) required.push('SubmissionRule');
-  if (required.some(key => !Object.hasOwn(current, key) || current[key] === undefined)) {
-    throw fail('INCOMPLETE_NATIVE_DATA', 'Required Assignment settings are missing; no update was sent.');
+  // These fields lack a documented omission-preserves-current guarantee.
+  const required = ['CategoryId', 'Name', 'GroupTypeId', 'DisplayInCalendar',
+    'NotificationEmail', 'CustomInstructions', 'Availability'];
+  const missing = required.filter(key => !Object.hasOwn(current, key) || current[key] === undefined);
+  if (missing.length) {
+    throw Object.assign(fail('INCOMPLETE_NATIVE_DATA', `Required Assignment fields missing: ${missing.join(', ')}. No update was sent.`), { fields: missing });
   }
-  if (typeof current.Name !== 'string' || typeof current.DisplayInCalendar !== 'boolean' ||
-      typeof current.AllowOnlyUsersWithSpecialAccess !== 'boolean') {
-    throw fail('INCOMPLETE_NATIVE_DATA', 'Assignment settings are unavailable or invalid; check service-user permissions.');
+  if (typeof current.Name !== 'string' || typeof current.DisplayInCalendar !== 'boolean') {
+    throw fail('INCOMPLETE_NATIVE_DATA', 'Assignment Name or DisplayInCalendar is invalid; no update was sent.');
   }
   const availability = current.Availability;
   if (!availability || ['StartDateAvailabilityType','EndDateAvailabilityType'].some(key =>
@@ -42,17 +43,19 @@ function buildAssignmentPayload(current, dates, supportsLeVersion) {
   if (typeof rich?.Html === 'string') instructions = { Content: rich.Html, Type: 'Html' };
   else if (typeof rich?.Text === 'string') instructions = { Content: rich.Text, Type: 'Text' };
   else throw fail('INCOMPLETE_NATIVE_DATA', 'Assignment instructions could not be preserved.');
-  if (current.Assessment !== null && (!current.Assessment || !Object.hasOwn(current.Assessment, 'ScoreDenominator'))) {
-    throw fail('INCOMPLETE_NATIVE_DATA', 'Assignment assessment settings could not be preserved.');
-  }
-  const payload = Object.fromEntries(fields.map(key => [key, structuredClone(current[key])]));
+  // D2L documents omission/null as preserving these non-date settings.
+  // Do not invent defaults when they are unavailable in the read response.
+  const payload = Object.fromEntries(fields.filter(key => Object.hasOwn(current, key) && current[key] !== undefined)
+    .map(key => [key, structuredClone(current[key])]));
   payload.CustomInstructions = instructions;
-  payload.Assessment = current.Assessment === null ? null : { ScoreDenominator: current.Assessment.ScoreDenominator };
+  if (current.Assessment?.ScoreDenominator != null) {
+    payload.Assessment = { ScoreDenominator: current.Assessment.ScoreDenominator };
+  }
   payload.Availability = { StartDate: dates.start, EndDate: dates.end,
     StartDateAvailabilityType: availability.StartDateAvailabilityType,
     EndDateAvailabilityType: availability.EndDateAvailabilityType };
   payload.DueDate = dates.due;
-  if (supportsLeVersion('1.98')) payload.SubmissionRule = current.SubmissionRule;
+  if (supportsLeVersion('1.98')) payload.SubmissionRule = current.SubmissionRule ?? null;
   return payload;
 }
 function preservedSettings(payload) {
@@ -112,6 +115,7 @@ function createAssignmentWriter({ api, put }) {
       const known = allowed.includes(error.code);
       result.error = { category: known ? error.code : stage === 'validation' ? 'INVALID_INPUT' : 'API_FAILURE', stage,
         message: known ? error.message : 'Assignment operation failed; check configuration, permissions and API connectivity.',
+        ...(known && Array.isArray(error.fields) ? { fields: error.fields } : {}),
         ...(Number.isInteger(error.status) ? { httpStatus: error.status } : {}) };
       return result;
     }
