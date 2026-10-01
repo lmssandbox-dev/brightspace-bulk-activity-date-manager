@@ -65,3 +65,8 @@ test('form routes each activity type and enforces its own scope and preview iden
   if(type==='discussionTopic')assert.equal(calls[1].activity.parentId,'31');
  }
 });
+
+test('form no longer offers the invalid same-time preview shortcut', () => {
+  const s=setup();const html=s.routes.form(response());
+  assert.doesNotMatch(html,/value="now"/);assert.match(html,/Assignments require Start earlier than End/);
+});

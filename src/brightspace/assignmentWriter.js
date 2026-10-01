@@ -33,10 +33,11 @@ function buildAssignmentPayload(current, dates, supportsLeVersion) {
   if (typeof current.Name !== 'string' || typeof current.DisplayInCalendar !== 'boolean') {
     throw fail('INCOMPLETE_NATIVE_DATA', 'Assignment Name or DisplayInCalendar is invalid; no update was sent.');
   }
-  const availability = current.Availability;
+  const availability = current.Availability === null
+    ? { StartDateAvailabilityType: null, EndDateAvailabilityType: null } : current.Availability;
   if (!availability || ['StartDateAvailabilityType','EndDateAvailabilityType'].some(key =>
-    ![0,1,2,'0','1','2'].includes(availability[key]))) {
-    throw fail('UNKNOWN_AVAILABILITY', 'Existing availability types are required; defaults will not be guessed.');
+    ![null,0,1,2,'0','1','2'].includes(availability[key]))) {
+    throw fail('UNKNOWN_AVAILABILITY', 'Availability types must be null or a recognized value.');
   }
   const rich = current.CustomInstructions;
   let instructions;
@@ -54,18 +55,25 @@ function buildAssignmentPayload(current, dates, supportsLeVersion) {
   payload.Availability = { StartDate: dates.start, EndDate: dates.end,
     StartDateAvailabilityType: availability.StartDateAvailabilityType,
     EndDateAvailabilityType: availability.EndDateAvailabilityType };
+  // Omitted unspecified types use the documented org-unit defaults.
+  for (const key of ['StartDateAvailabilityType','EndDateAvailabilityType']) {
+    if (payload.Availability[key] === null) delete payload.Availability[key];
+  }
   payload.DueDate = dates.due;
   if (supportsLeVersion('1.98')) payload.SubmissionRule = current.SubmissionRule ?? null;
   return payload;
 }
-function preservedSettings(payload) {
+function preservedSettings(payload, requested = payload) {
   const result = structuredClone(payload);
   delete result.DueDate; delete result.Availability.StartDate; delete result.Availability.EndDate;
   // Brightspace may serialize enums as numbers or decimal strings.
   for (const key of ['DropboxType','SubmissionType','CompletionType','SubmissionRule']) {
     if (result[key] != null) result[key] = String(result[key]);
   }
-  for (const key of ['StartDateAvailabilityType','EndDateAvailabilityType']) result.Availability[key] = String(result.Availability[key]);
+  for (const key of ['StartDateAvailabilityType','EndDateAvailabilityType']) {
+    if (!Object.hasOwn(requested.Availability, key)) delete result.Availability[key];
+    else if (Object.hasOwn(result.Availability, key)) result.Availability[key] = String(result.Availability[key]);
+  }
   return result;
 }
 function createAssignmentWriter({ api, put }) {
@@ -81,6 +89,9 @@ function createAssignmentWriter({ api, put }) {
       if (activity.type !== 'assignment' || (activity.orgUnitId != null && id(activity.orgUnitId) !== orgUnitId) ||
           (activity.key != null && activity.key !== result.activityKey)) throw fail('INVALID_IDENTITY', 'Assignment identity does not match the course.');
       result.requestedDates = validateDates(dates);
+      if (instantKey(result.requestedDates.start) >= instantKey(result.requestedDates.end)) {
+        throw fail('INVALID_DATES', 'Assignment Start must be earlier than End.');
+      }
       const path = api.coursePath(orgUnitId, `dropbox/folders/${activityId}`);
       stage = 'read';
       const current = await api.read(path);
@@ -102,7 +113,7 @@ function createAssignmentWriter({ api, put }) {
       if (id(after.Id) !== activityId) throw fail('INVALID_IDENTITY', 'Verification returned another Assignment.');
       result.verifiedDates = normalizeAssignment(after, orgUnitId).dates;
       const afterPayload = buildAssignmentPayload(after, result.requestedDates, api.supportsLeVersion);
-      if (!isDeepStrictEqual(preservedSettings(payload), preservedSettings(afterPayload))) {
+      if (!isDeepStrictEqual(preservedSettings(payload), preservedSettings(afterPayload, payload))) {
         throw fail('SETTINGS_CHANGED', 'Read-back found unrelated setting changes; inspect the Assignment before retrying.');
       }
       if (!sameDates(result.verifiedDates, result.requestedDates)) {
@@ -114,9 +125,12 @@ function createAssignmentWriter({ api, put }) {
       const allowed = ['INVALID_DATES','INVALID_DATE','INVALID_IDENTITY','INCOMPLETE_NATIVE_DATA','UNKNOWN_AVAILABILITY','SETTINGS_CHANGED','VERIFICATION_MISMATCH'];
       const known = allowed.includes(error.code);
       result.error = { category: known ? error.code : stage === 'validation' ? 'INVALID_INPUT' : 'API_FAILURE', stage,
-        message: known ? error.message : 'Assignment operation failed; check configuration, permissions and API connectivity.',
+        message: known ? error.message : error.status === 400
+          ? 'Brightspace rejected the Assignment update (HTTP 400). See validation details below; the cause is not yet confirmed.'
+          : 'Assignment operation failed; check configuration, permissions and API connectivity.',
         ...(known && Array.isArray(error.fields) ? { fields: error.fields } : {}),
-        ...(Number.isInteger(error.status) ? { httpStatus: error.status } : {}) };
+        ...(Number.isInteger(error.status) ? { httpStatus: error.status } : {}),
+        ...(error.status === 400 && Array.isArray(error.validation) ? { validation: error.validation } : {}) };
       return result;
     }
   } };

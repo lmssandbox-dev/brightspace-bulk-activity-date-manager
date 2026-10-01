@@ -18,6 +18,10 @@ function setup(options = {}) {
     calls.push({method:'PUT',path,payload});
     if (!options.ignoreWrite) {
       current.Availability = structuredClone(payload.Availability); current.DueDate = payload.DueDate;
+      for (const key of ['StartDateAvailabilityType','EndDateAvailabilityType']) {
+        if (!Object.hasOwn(current.Availability,key)) current.Availability[key]=options.defaultType ?? 0;
+      }
+      if(options.changeAvailability) current.Availability.EndDateAvailabilityType=99;
       if (options.changeSettings) current.IsHidden = !current.IsHidden;
     }
     if (options.putError) throw Object.assign(new Error('SECRET'), {status: options.putError});
@@ -71,7 +75,7 @@ test('undated Assignments retain every known availability type', async () => {
   }
 });
 test('missing settings and unknown availability block writes instead of defaulting', async () => {
-  for (const modify of [c=>delete c.Name,c=>delete c.CustomInstructions,c=>c.Availability=null,c=>delete c.Availability.EndDateAvailabilityType,c=>c.Availability.StartDateAvailabilityType=99]) {
+  for (const modify of [c=>delete c.Name,c=>delete c.CustomInstructions,c=>delete c.Availability.EndDateAvailabilityType,c=>c.Availability.StartDateAvailabilityType=99]) {
     const {writer,current,calls}=setup();modify(current);assert.equal((await writer.updateActivityDates(request)).status,'failed');assert.equal(calls.length,1);
   }
 });
@@ -122,4 +126,54 @@ test('missing required field names are reported without native data', async () =
   assert.deepEqual(result.error.fields,['NotificationEmail','CustomInstructions']);
   assert.match(result.error.message,/NotificationEmail, CustomInstructions/);
   assert.equal(result.writeAttempted,false);assert.equal(calls.length,1);
+});
+
+test('HTTP 400 preserves selected validation messages but removes payload secrets', async () => {
+  const {createActivityPut}=require('../src/brightspace/client');
+  const put=createActivityPut({type:'assignment',leRoot:'https://tenant.example/d2l/api/le/1.98',
+    oauth:{getAccessToken:async()=> 'private-access-token'},http:async()=>{throw Object.assign(new Error('RAW SECRET'),{
+      config:{headers:{Authorization:'Bearer private-access-token'}},response:{status:400,data:{
+        Message:'EndDate must be later than StartDate.',Errors:[{Message:'Invalid password supersecret; contact teacher@example.invalid. Bearer private-access-token'}],
+        Debug:'RAW SECRET',Password:'supersecret'}}});}});
+  await assert.rejects(()=>put('https://tenant.example/d2l/api/le/1.98/999/dropbox/folders/11',{Password:'supersecret'}),error=>{
+    assert.equal(error.status,400);assert.ok(error.validation.includes('EndDate must be later than StartDate.'));
+    for(const value of ['supersecret','teacher@example.invalid','private-access-token','RAW SECRET'])assert.equal(JSON.stringify(error).includes(value),false);
+    return true;
+  });
+});
+test('Assignment propagates sanitized HTTP 400 reason after unchanged read-back',async()=>{
+  const current=structuredClone(fixture);const calls=[];
+  const api={coursePath:()=> 'path',supportsLeVersion:()=>true,read:async()=>structuredClone(current)};
+  const writer=createAssignmentWriter({api,put:async()=>{calls.push('PUT');throw Object.assign(new Error('not displayed'),{status:400,validation:['Invalid date interval.']});}});
+  const result=await writer.updateActivityDates(request);
+  assert.equal(result.status,'failed');assert.equal(result.error.httpStatus,400);assert.deepEqual(result.error.validation,['Invalid date interval.']);assert.equal(calls.length,1);
+});
+
+test('Assignment equal start and end fail before any API call', async () => {
+  const {writer,calls}=setup();
+  const result=await writer.updateActivityDates({...request,dates:{start:dates.start,due:dates.start,end:dates.start},dryRun:true});
+  assert.equal(result.status,'failed');assert.equal(result.error.category,'INVALID_DATES');
+  assert.equal(result.error.message,'Assignment Start must be earlier than End.');
+  assert.equal(result.writeAttempted,false);assert.equal(calls.length,0);
+});
+
+test('null Assignment availability uses course defaults, previews safely and reruns unchanged', async () => {
+  for (const defaultType of [0,1,2]) {
+    const s=setup({defaultType});s.current.Availability=null;s.current.DueDate=null;
+    const preview=await s.writer.updateActivityDates({...request,dryRun:true});
+    assert.equal(preview.status,'ready');assert.equal(preview.writeAttempted,false);
+    assert.equal((await s.writer.updateActivityDates(request)).status,'updated');
+    const payload=s.calls.find(c=>c.method==='PUT').payload;
+    assert.deepEqual(payload.Availability,{StartDate:dates.start,EndDate:dates.end});
+    assert.equal((await s.writer.updateActivityDates(request)).status,'unchanged');
+    assert.equal(s.calls.filter(c=>c.method==='PUT').length,1);
+  }
+});
+test('mixed Assignment availability preserves known values and rejects invalid read-back', async () => {
+  const row=structuredClone(fixture);row.Availability.StartDateAvailabilityType=null;
+  const p=buildAssignmentPayload(row,dates,()=>true);
+  assert.equal(Object.hasOwn(p.Availability,'StartDateAvailabilityType'),false);
+  assert.equal(p.Availability.EndDateAvailabilityType,row.Availability.EndDateAvailabilityType);
+  const s=setup({changeAvailability:true});s.current.Availability=null;
+  assert.equal((await s.writer.updateActivityDates(request)).error.category,'UNKNOWN_AVAILABILITY');
 });

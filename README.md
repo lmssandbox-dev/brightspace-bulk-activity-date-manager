@@ -90,13 +90,13 @@ npm run assignment:dates -- 9524 983 '2027-01-01T09:00:00-03:00' '2027-01-02T23:
 
 Those are example dates, not approved live-test values. Append `--apply` only when the target and dates are intended. Register `dropbox:folders:write` and include it in the operator environment's OAuth scopes for an apply run; retain the necessary read scopes and Service User permissions. No registration, scopes or live data were changed during implementation.
 
-The result is `ready` (dry run), `unchanged`, `updated` (verified), or `failed`, with requested/verified dates and a sanitized error. Unknown availability semantics block an update. See [TECHNICAL.md](TECHNICAL.md) for limits and live acceptance.
+The result is `ready` (dry run), `unchanged`, `updated` (verified), or `failed`, with requested/verified dates and a sanitized error. Explicit availability types are preserved. Null types (including null Assignment Availability) use Brightspace’s configured course defaults when dates are added; invalid or missing type fields still block updates. See [TECHNICAL.md](TECHNICAL.md) for limits and live acceptance.
 
 ## Assignment test form on Render
 
 Deploy the updated `index.js` and complete `src/` folder, then relaunch through Brightspace. The page includes **Assignment date test — 01C** below discovery.
 
-Enter Course Offering ID `9524` and Assignment ID `983`. Enter three Brasília date-times, or use **Preview current Brasília time for all dates**. Review the result, then choose **Apply these dates**. Equal start/end dates create a zero-duration availability window. Preview makes no writes; apply uses exactly the previewed dates and re-reads/verifies the Assignment.
+Enter Course Offering ID `9524` and Assignment ID `983`. Enter three Brasília date-times, with Start earlier than End. Review the result, then choose **Apply these dates**. Assignments reject equal start/end dates. Preview makes no writes; apply uses exactly the previewed dates and re-reads/verifies the Assignment.
 
 Applying requires `dropbox:folders:write` in the Brightspace OAuth registration and Render's `D2L_OAUTH2_SCOPES`, plus Service User edit permissions. Keep existing read scopes. Without the configured write scope, preview remains available but Apply is not offered. Restart after environment changes.
 
@@ -116,6 +116,22 @@ The LTI test form now includes **Activity type**, **Activity ID** and **Forum ID
 - Discussion Topic scope: `discussions:topics:manage` or a covering wildcard.
 - Assignment scope remains `dropbox:folders:write` or a covering wildcard.
 
-Set scopes in both the OAuth registration and Render environment. Deploy updated `index.js` and all of `src/`, then relaunch through the LMS. Use ordered dates with Due strictly later than Start for Discussion Topics; the all-dates-now option does not meet that API rule.
+Set scopes in both the OAuth registration and Render environment. Deploy updated `index.js` and all of `src/`, then relaunch through the LMS. Use ordered dates with Due strictly later than Start for Discussion Topics; the same-time shortcut has been removed.
 
 The Assignment write has been confirmed live by the user, including Apply-only mutation. Quiz and Discussion Topic live tests are still pending. The Discussion read contract may omit calendar-display settings; this implementation blocks rather than defaulting those settings. If preview reports `DisplayInCalendar` or `DisplayUnlockDatesInCalendar` missing, provide the error for investigation; no update is sent.
+
+## Local Mac API testing
+
+A project-local Node 22 runtime is installed in `.local-tools/node` (ignored by Git). In Terminal:
+
+```sh
+cd "/Users/guilhermesimoni/Documents/ChatGPT/Brightspace Bulk Activity Date Manager"
+export PATH="$PWD/.local-tools/node/bin:$PATH"
+npm test
+npm run check
+npm run verify:discovery -- 9524
+```
+
+Fill `.env` with the existing Render API version, key ID and matching private key before live API calls. Keep secrets out of chat and version control. The template already has the tenant, OAuth client ID and native-tool scopes. Verify the token endpoint matches Render. Local API scripts need neither MongoDB nor an LTI launch; `npm start` still requires the full web configuration. The Assignment CLI is dry-run unless `--apply` is supplied. Do not deploy `.local-tools`, `.env` or `node_modules`; keep `package-lock.json` for reproducible installs.
+
+Assignment previews now require **Start < End**; the API confirmed that equal start/end dates cause HTTP 400. Enter dates manually and use Preview selected dates.

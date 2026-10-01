@@ -7,7 +7,7 @@ const fixture=type=>structuredClone(require(`./fixtures/${type}-write.json`));
 function setup(type,options={}){
  const current=fixture(type),calls=[];let reads=0;
  const api={supportsLeVersion:()=>true,coursePath:(org,path)=>`https://tenant.example/d2l/api/le/1.98/${org}/${path}`,async read(path){calls.push(['GET',path]);reads++;if(options.readError||(reads>1&&options.verifyError))throw new Error('SECRET');return structuredClone(current);}};
- const put=async(path,payload)=>{calls.push(['PUT',path,payload]);if(!options.ignoreWrite){current.StartDate=payload.StartDate;current.DueDate=payload.DueDate;current.EndDate=payload.EndDate;}if(options.changeSettings)current.Name='changed';if(options.putError)throw Object.assign(new Error('SECRET'),{status:403});};
+ const put=async(path,payload)=>{calls.push(['PUT',path,payload]);if(!options.ignoreWrite){current.StartDate=payload.StartDate;current.DueDate=payload.DueDate;current.EndDate=payload.EndDate;if(type==='discussionTopic'){for(const key of ['StartDateAvailabilityType','EndDateAvailabilityType'])current[key]=Object.hasOwn(payload,key)?payload[key]:(options.defaultType??0);if(options.changeAvailability)current.EndDateAvailabilityType=2;}}if(options.changeSettings)current.Name='changed';if(options.putError)throw Object.assign(new Error('SECRET'),{status:403});};
  return {current,calls,writer:createNativeWriter({api,put,type}),request:{orgUnitId:'9524',activity:{type,id:'11',...(type==='discussionTopic'?{parentId:'31'}:{})},dates}};
 }
 for(const type of ['quiz','discussionTopic']){
@@ -42,7 +42,7 @@ test('Discussion Topic requires valid forum, strictly later due date and known c
  result=await s.writer.updateActivityDates({...s.request,activity:{type:'discussionTopic',id:'11'}});assert.equal(result.status,'failed');assert.equal(s.calls.length,0);
  s.current.ForumId=99;result=await s.writer.updateActivityDates(s.request);assert.equal(result.error.category,'INVALID_IDENTITY');
  const row=fixture('discussionTopic');delete row.DisplayInCalendar;assert.throws(()=>buildDiscussionTopicPayload(row,dates),e=>e.fields.includes('DisplayInCalendar'));
- row.DisplayInCalendar=true;row.StartDateAvailabilityType=null;assert.throws(()=>buildDiscussionTopicPayload(row,dates),e=>e.code==='UNKNOWN_AVAILABILITY');
+ row.DisplayInCalendar=true;row.StartDateAvailabilityType=99;assert.throws(()=>buildDiscussionTopicPayload(row,dates),e=>e.code==='UNKNOWN_AVAILABILITY');
 });
 test('native PUT transport is restricted separately for each writer',async()=>{
  for(const [type,path] of [['quiz','quizzes/11'],['discussionTopic','discussions/forums/31/topics/11']]){
@@ -51,4 +51,30 @@ test('native PUT transport is restricted separately for each writer',async()=>{
   for(const wrong of ['content/topics/11','dropbox/folders/11',path+'/specialaccess/5'])await assert.rejects(()=>put(`https://tenant.example/d2l/api/le/1.98/9524/${wrong}`,{}));
   assert.equal(calls.length,1);
  }
+});
+
+test('undated Discussion with null types uses defaults and verifies without duplicate writes',async()=>{
+ for(const defaultType of [0,1,2]){
+  const s=setup('discussionTopic',{defaultType});
+  s.current.StartDate=null;s.current.DueDate=null;s.current.EndDate=null;
+  s.current.StartDateAvailabilityType=null;s.current.EndDateAvailabilityType=null;
+  assert.equal((await s.writer.updateActivityDates({...s.request,dryRun:true})).status,'ready');
+  assert.equal(s.calls.length,1);
+  assert.equal((await s.writer.updateActivityDates(s.request)).status,'updated');
+  const payload=s.calls.find(c=>c[0]==='PUT')[2];
+  assert.equal(Object.hasOwn(payload,'StartDateAvailabilityType'),false);
+  assert.equal(Object.hasOwn(payload,'EndDateAvailabilityType'),false);
+  assert.equal((await s.writer.updateActivityDates(s.request)).status,'unchanged');
+  assert.equal(s.calls.filter(c=>c[0]==='PUT').length,1);
+ }
+});
+test('mixed Discussion types preserve explicit values and still detect changed settings',async()=>{
+ const row=fixture('discussionTopic');row.StartDateAvailabilityType=null;
+ const payload=buildDiscussionTopicPayload(row,dates);
+ assert.equal(Object.hasOwn(payload,'StartDateAvailabilityType'),false);
+ assert.equal(payload.EndDateAvailabilityType,row.EndDateAvailabilityType);
+ const s=setup('discussionTopic',{changeSettings:true});s.current.StartDateAvailabilityType=null;
+ assert.equal((await s.writer.updateActivityDates(s.request)).error.category,'SETTINGS_CHANGED');
+ delete row.EndDateAvailabilityType;
+ assert.throws(()=>buildDiscussionTopicPayload(row,dates),e=>e.code==='INCOMPLETE_NATIVE_DATA');
 });

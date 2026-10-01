@@ -92,3 +92,5 @@ Scope authority: [V1 product scope](#v1-product-scope-and-architecture), accepte
 ### Current 01C acceptance
 
 Assignment: user confirmed successful live date updates and that Preview alone makes no changes. Quiz and Discussion Topic: fixture tests pass; deploy and test one known native activity of each type, check preservation in the LMS, and rerun identical dates for unchanged. Discussion calendar-field availability is an unresolved compatibility check. Do not mark 01C complete or start bulk execution until these checks pass.
+
+Assignment local live acceptance: Course 9524 / Assignment 983 updated with the approved valid interval; read-back matched and identical rerun returned unchanged without PUT. The equal-date HTTP 400 is resolved by pre-write validation. Quiz and Discussion Topic live acceptance remain pending.

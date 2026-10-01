@@ -37,7 +37,7 @@ function createAssignmentDates({ writer, writers = { assignment: writer }, deplo
   function form(res, courseId = '') {
     return `<hr><h2>Activity date test — 01C</h2>
       <p>Update one Assignment, Quiz or Discussion Topic. Times are Brasília time (America/Sao_Paulo, UTC−03:00).</p>
-      <p>For Discussion Topics, enter the Forum ID and choose a Due date later than Start. The same-time preview is not valid for this type.</p>
+      <p>For Discussion Topics, enter the Forum ID and choose a Due date later than Start. Assignments require Start earlier than End.</p>
       <p>Available write scopes: ${Object.keys(labels).filter(enabled).map(type=>labels[type]).join(', ') || 'none configured'}. Preview does not change dates.</p>
       <form method="post" action="/diagnostics/assignment-dates/preview">
         ${hidden('ltik',res.locals.ltik)}${hidden('ticket',issue(res,'form'))}
@@ -47,7 +47,6 @@ function createAssignmentDates({ writer, writers = { assignment: writer }, deplo
         <p><label>Forum ID (Discussion Topic only; discovery parentId) <input name="parentId" pattern="[1-9][0-9]*"></label></p>
         ${['start','due','end'].map(field=>`<p><label>${field[0].toUpperCase()+field.slice(1)} <input type="datetime-local" step="1" name="${field}"></label></p>`).join('')}
         <button name="mode" value="selected" type="submit">Preview selected dates</button>
-        <button name="mode" value="now" type="submit">Preview current Brasília time for all dates</button>
       </form>`;
   }
   function authorize(req,res) {
@@ -58,9 +57,10 @@ function createAssignmentDates({ writer, writers = { assignment: writer }, deplo
   }
   const summary = result => `<h2>Activity ${escape(result.activityKey)}</h2><p>${escape(result.name)}</p>
     <p>Status: <strong>${escape(result.status)}</strong></p>
+    ${['assignment','discussionTopic'].includes(result.type) ? '<p>Existing availability modes are preserved. Where no mode is configured, Brightspace uses the course default when dates are applied.</p>' : ''}
     <table><thead><tr><th>Date</th><th>Requested — Brasília</th><th>Current / verified — Brasília</th></tr></thead><tbody>
     ${['start','due','end'].map(field=>`<tr><td>${field}</td><td>${escape(display(result.requestedDates?.[field]))}</td><td>${escape(display(result.verifiedDates?.[field]))}</td></tr>`).join('')}</tbody></table>
-    ${result.error ? `<p>${escape(result.error.message)}</p>` : ''}
+    ${result.error ? `<p>${escape(result.error.message)}</p>${result.error.validation?.length ? `<ul>${result.error.validation.map(message=>`<li>${escape(message)}</li>`).join('')}</ul>` : ''}` : ''}
     <details><summary>Technical result (UTC)</summary><pre>${escape(JSON.stringify(result,null,2))}</pre></details>`;
   function display(value) {return value ? new Intl.DateTimeFormat('pt-BR',{timeZone:zone,dateStyle:'short',timeStyle:'medium'}).format(new Date(value)) : '—';}
   return { form,

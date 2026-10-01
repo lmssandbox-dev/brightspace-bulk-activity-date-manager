@@ -148,6 +148,7 @@ function createActivityPut({ http, oauth, leRoot, type }) {
     } catch (error) {
       const safe = new Error('Activity API update failed');
       safe.status = Number.isInteger(error.response?.status) ? error.response.status : null;
+      if (safe.status === 400) safe.validation = validationDetails(error.response?.data, data, token);
       throw safe;
     }
   };
@@ -172,3 +173,39 @@ function hasScope(scopes, required) {
 module.exports.hasScope = hasScope;
 
 module.exports.createActivityPut = createActivityPut;
+
+// Expose only selected validation fields, never Axios config/headers or raw payloads.
+function validationDetails(body, payload, token) {
+  if (!body || typeof body !== 'object' || Array.isArray(body)) return [];
+  const secrets = [token];
+  function collect(value, sensitive = false) {
+    if (typeof value === 'string' && sensitive && value) secrets.push(value);
+    else if (value && typeof value === 'object') for (const [key,item] of Object.entries(value)) {
+      collect(item, sensitive || /password|token|secret|assertion|email|instructions|description|header|footer/i.test(key));
+    }
+  }
+  collect(payload);
+  const clean = value => {
+    let text = String(value);
+    for (const secret of secrets.filter(s => typeof s === 'string' && s.length).sort((a,b)=>b.length-a.length)) text=text.split(secret).join('[REDACTED]');
+    return text.replace(/Bearer\s+[^\s"<>]+/gi,'Bearer [REDACTED]')
+      .replace(/[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}/g,'[REDACTED EMAIL]')
+      .replace(/eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+/g,'[REDACTED TOKEN]')
+      .replace(/[\x00-\x1f]/g,' ').slice(0,500);
+  };
+  const messages=[];
+  const read = object => {
+    if (!object || typeof object !== 'object') return;
+    for (const key of ['Message','message','Detail','detail','Title','title','ErrorCode','errorCode']) {
+      if (typeof object[key] === 'string' || typeof object[key] === 'number') messages.push(clean(object[key]));
+    }
+  };
+  read(body);
+  for (const key of ['Errors','errors']) {
+    const errors=body[key];
+    if (Array.isArray(errors)) for (const error of errors.slice(0,10)) {
+      if (typeof error === 'string') messages.push(clean(error)); else read(error);
+    }
+  }
+  return [...new Set(messages)].filter(Boolean).slice(0,10);
+}

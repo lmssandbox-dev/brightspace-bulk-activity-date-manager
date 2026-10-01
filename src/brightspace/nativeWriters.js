@@ -47,19 +47,26 @@ const topicFields=['Name','AllowAnonymousPosts','IsHidden','UnlockStartDate','Un
 function buildDiscussionTopicPayload(row,dates) {
   required(row,[...topicFields,'Description']);
   for(const key of ['StartDateAvailabilityType','EndDateAvailabilityType']) {
-    if(![0,1,2,'0','1','2'].includes(row[key]))throw fail('UNKNOWN_AVAILABILITY','Discussion availability types are unknown; defaults will not be guessed.');
+    if(![null,0,1,2,'0','1','2'].includes(row[key]))throw fail('UNKNOWN_AVAILABILITY','Discussion availability types must be null or a recognized value.');
   }
   if(typeof row.DisplayInCalendar!=='boolean'||typeof row.DisplayUnlockDatesInCalendar!=='boolean') {
     throw fail('INCOMPLETE_NATIVE_DATA','Discussion calendar settings are unknown; no update was sent.');
   }
   const payload=Object.fromEntries(topicFields.map(key=>[key,structuredClone(row[key])]));
+  // Omit unspecified types so Brightspace applies its configured course defaults.
+  for (const key of ['StartDateAvailabilityType','EndDateAvailabilityType']) {
+    if (payload[key] === null) delete payload[key];
+  }
   return {...payload,Description:richText(row.Description),StartDate:dates.start,DueDate:dates.due,EndDate:dates.end};
 }
 const dateKey=value=>value===null?null:value.replace(/\.(\d+)Z$/,(_,f)=>`.${f.padEnd(9,'0')}Z`);
 const equalDates=(a,b)=>['start','due','end'].every(key=>dateKey(a[key])===dateKey(b[key]));
-function settings(payload) {
+function settings(payload, requested = payload) {
   const copy=structuredClone(payload);delete copy.StartDate;delete copy.DueDate;delete copy.EndDate;
   for(const key of ['ScoringType','RatingType','StartDateAvailabilityType','EndDateAvailabilityType'])if(copy[key]!=null)copy[key]=String(copy[key]);
+  for (const key of ['StartDateAvailabilityType','EndDateAvailabilityType']) {
+    if (!Object.hasOwn(requested, key)) delete copy[key];
+  }
   return copy;
 }
 function createNativeWriter({api,put,type}) {
@@ -88,7 +95,7 @@ function createNativeWriter({api,put,type}) {
       stage='verification';result.verifiedDates=null;
       const after=await api.read(path);check(after);result.verifiedDates=normalize(after,orgUnitId).dates;
       const verified=build(after,result.requestedDates,api.supportsLeVersion);
-      if(!isDeepStrictEqual(settings(payload),settings(verified)))throw fail('SETTINGS_CHANGED','Unrelated settings differ after the update; inspect the activity before retrying.');
+      if(!isDeepStrictEqual(settings(payload),settings(verified,payload)))throw fail('SETTINGS_CHANGED','Unrelated settings differ after the update; inspect the activity before retrying.');
       if(!equalDates(result.verifiedDates,result.requestedDates)){
         if(writeError){stage='write';throw writeError;}
         throw fail('VERIFICATION_MISMATCH','Read-back dates do not match the request.');
@@ -98,7 +105,8 @@ function createNativeWriter({api,put,type}) {
       const known=['INVALID_DATE','INVALID_DATES','INVALID_IDENTITY','INCOMPLETE_NATIVE_DATA','UNKNOWN_AVAILABILITY','SETTINGS_CHANGED','VERIFICATION_MISMATCH'].includes(error.code);
       result.error={category:known?error.code:stage==='validation'?'INVALID_INPUT':'API_FAILURE',stage,
         message:known?error.message:'Activity operation failed; check API configuration and Service User permissions.',
-        ...(known&&error.fields?{fields:error.fields}:{}),...(Number.isInteger(error.status)?{httpStatus:error.status}:{})};
+        ...(known&&error.fields?{fields:error.fields}:{}),...(Number.isInteger(error.status)?{httpStatus:error.status}:{}),
+        ...(error.status === 400 && Array.isArray(error.validation) ? { validation: error.validation } : {})};
       return result;
     }
   }};
