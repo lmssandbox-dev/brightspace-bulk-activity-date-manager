@@ -1,0 +1,22 @@
+{
+  "name": "brightspace-bulk-activity-date-manager",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Bulk activity date management for Brightspace Course Offerings; current implementation provides authenticated read-only discovery.",
+  "main": "index.js",
+  "type": "commonjs",
+  "engines": {
+    "node": "22.x"
+  },
+  "scripts": {
+    "start": "node index.js",
+    "test": "node --test test/*.test.js",
+    "check": "node --check index.js && node --check scripts/discovery-acceptance.js && node --check scripts/verify-discovery.js && node --check src/brightspace/activities/assignments.js && node --check src/brightspace/activities/discussions.js && node --check src/brightspace/activities/normalizers.js && node --check src/brightspace/activities/quizzes.js && node --check src/brightspace/auth.js && node --check src/brightspace/client.js && node --check src/brightspace/deploymentGuard.js && node --check src/brightspace/id.js && node --check src/config/database.js && node --check src/routes/discoveryDiagnostics.js && node --check src/services/activityDiscovery.js",
+    "verify:discovery": "node scripts/verify-discovery.js"
+  },
+  "dependencies": {
+    "axios": "^1.8.4",
+    "dotenv": "^16.4.7",
+    "ltijs": "5.9.9"
+  }
+}
