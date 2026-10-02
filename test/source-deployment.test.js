@@ -94,3 +94,25 @@ test('activation interruption retains deployment IDs and allows status reconcili
  const job={kind:'sourceDeployment',operation:'activate',tasks:[{result:{status:'submitted',deploymentId:'123'},targets:[{activation:{status:'running',writeAttempted:true}}]}]};
  interruptJob(job);assert.equal(job.status,'activationWithErrors');assert.equal(job.tasks[0].result.deploymentId,'123');assert.equal(job.tasks[0].targets[0].activation.status,'failed');
 });
+
+test('source validation succeeds when only optional name lookup is forbidden',async()=>{
+ const calls=[];const c=createSourceDeploymentClient({baseUrl:'https://tenant.example',lpVersion:'1.53',api:{read:async url=>{calls.push(url);if(url.includes('reofferedCourses'))return {ReofferedCourses:[]};throw {status:403,message:'SECRET'};}}});
+ const source=await c.source('9532');assert.equal(source.name,'Source Course 9532');assert.equal(source.orgUnitId,'9532');assert.match(source.warning,/HTTP 403/);assert.equal(calls.length,2);
+ const engine=createDeploymentJobs({enabled:()=>true,client:{source:c.source,target:async orgUnitId=>({orgUnitId,name:'Replica',isActive:true})}});
+ const job={rows:parseDeploymentCsv('SourceOrgUnitId,ReplicaOrgUnitId\n9532,8062\n9532,8063'),tasks:[]};
+ await engine.plan(job,async()=>{});assert.equal(job.status,'ready');assert.equal(job.tasks[0].targets.length,2);assert.match(job.rows[0].message,/display name/);
+});
+test('source validation errors cannot be bypassed by optional metadata fallback',async()=>{
+ for(const status of [401,403,404,429,500]){
+  let calls=0;const c=createSourceDeploymentClient({baseUrl:'https://tenant.example',lpVersion:'1.53',api:{read:async()=>{calls++;throw {status,message:'SECRET'};}}});
+  await assert.rejects(()=>c.source('9532'),e=>e.stage==='source'&&e.httpStatus===status&&!e.message.includes('SECRET'));assert.equal(calls,1);
+ }
+ const c=createSourceDeploymentClient({baseUrl:'https://tenant.example',lpVersion:'1.53',api:{read:async()=>({})}});
+ await assert.rejects(()=>c.source('9532'),e=>e.reason==='INVALID_RESPONSE');
+});
+test('replica validation reports the failing ID, version and status without raw errors',async()=>{
+ const c=createSourceDeploymentClient({baseUrl:'https://tenant.example',lpVersion:'1.53',api:{read:async()=>{throw {status:404,message:'SECRET'};}}});
+ const engine=createDeploymentJobs({enabled:()=>true,client:{source:async()=>({name:'Source'}),target:c.target}});
+ const job={rows:parseDeploymentCsv('SourceOrgUnitId,ReplicaOrgUnitId\n9532,8062'),tasks:[]};
+ await engine.plan(job,async()=>{});assert.equal(job.status,'failed');assert.match(job.rows[0].message,/Replica.*8062.*LP 1.53, HTTP 404/);assert.doesNotMatch(job.rows[0].message,/SECRET/);
+});

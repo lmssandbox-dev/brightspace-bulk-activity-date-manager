@@ -33,11 +33,11 @@ function createDeploymentJobs({client,enabled,now=Date.now}){
     try{
      if(!sources.has(row.sourceId))sources.set(row.sourceId,await client.source(row.sourceId));
      const target=await client.target(row.targetId),source=sources.get(row.sourceId);
-     row.sourceName=source.name;row.targetName=target.name;row.status='valid';
+     row.sourceName=source.name;row.targetName=target.name;row.status='valid';if(source.warning)row.message=source.warning;
      let task=job.tasks.find(t=>t.sourceId===row.sourceId);
      if(!task){task={sourceId:row.sourceId,sourceName:source.name,targets:[],preview:{status:'ready'}};job.tasks.push(task);}
      task.targets.push(target);
-    }catch{row.status='invalid';row.message='Source or replica could not be validated. Source must be a Source Course; replica must be an accessible Course Offering. Check LP version and permissions.';}
+    }catch(error){row.status='invalid';row.message=error.code==='REPLICATION_VALIDATION'?error.message:'Source or replica lookup failed. Check the configured IDs, API connectivity and read permissions.';}
     await save(job);
    }
    job.status=job.rows.some(r=>r.status==='invalid')||!job.tasks.length?'failed':'ready';job.expiresAt=now()+30*60*1000;

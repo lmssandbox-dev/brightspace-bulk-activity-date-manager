@@ -4,20 +4,38 @@ function createSourceDeploymentClient({api,http,oauth,baseUrl,lpVersion}) {
   const base=new URL(baseUrl);
   const version=/^\d+\.\d+$/.test(lpVersion||'')?lpVersion:null;
   const root=version?`${base.origin}/d2l/api/lp/${version}`:null;
-  function configured(){const [major,minor]=(version||'0.0').split('.').map(Number);if(base.protocol!=='https:'||major<1||(major===1&&minor<53))throw Error('Source deployment requires LP 1.53 or later.');}
+  function configured(){const [major,minor]=(version||'0.0').split('.').map(Number);if(base.protocol!=='https:'||major<1||(major===1&&minor<53))throw Object.assign(Error('Source deployment requires LP 1.53 or later.'),{code:'LP_VERSION_UNSUPPORTED'});}
   const safeNumber=value=>{const n=Number(id(value));if(!Number.isSafeInteger(n))throw Error('ID exceeds JSON number precision');return n;};
+  function validationFailure(error,stage,orgUnitId,code){
+    const status=error?.status??error?.response?.status;
+    const httpStatus=Number.isInteger(status)?status:null;
+    code=code||(error?.code==='LP_VERSION_UNSUPPORTED'?'LP_VERSION_UNSUPPORTED':'API_READ_FAILED');
+    const label={source:'Source Course validation',sourceMetadata:'Source display-name lookup',replica:'Replica Course Offering lookup'}[stage];
+    const detail=code==='LP_VERSION_UNSUPPORTED'?'Set D2L_LP_VERSION to 1.53 or later.':code==='INVALID_RESPONSE'?'Brightspace returned an incomplete or unexpected response.':httpStatus===403?'Check the OAuth read scopes and Service User permissions.':httpStatus===404?'Check the ID, org-unit type and supported LP version.':httpStatus===401?'Check API authentication and granted read scopes.':httpStatus===429?'Brightspace rate limit reached; try a new preview later.':'Check API connectivity and availability.';
+    return Object.assign(new Error(`${label} for ${orgUnitId} failed (LP ${version||'invalid'}${httpStatus?`, HTTP ${httpStatus}`:''}). ${detail}`),{code:'REPLICATION_VALIDATION',stage,orgUnitId,httpStatus,reason:code});
+  }
+  async function validationRead(path,stage,orgUnitId){
+    try{configured();return await api.read(`${root}/${path}`);}
+    catch(error){throw validationFailure(error,stage,orgUnitId);}
+  }
   return {
     async source(value){
-      configured();const orgUnitId=id(value);
-      // The source-specific endpoint validates the source kind without hard-coding tenant type IDs.
-      await api.read(`${root}/sourceCourses/${orgUnitId}/reofferedCourses`);
-      const row=await api.read(`${root}/orgstructure/${orgUnitId}`);
-      if(id(row.Identifier)!==orgUnitId || typeof row.Name!=='string')throw Error('Invalid source response');
+      const orgUnitId=id(value);
+      // This authoritative source-specific GET must succeed. Display metadata is optional.
+      const result=await validationRead(`sourceCourses/${orgUnitId}/reofferedCourses`,'source',orgUnitId);
+      if(!result||!Array.isArray(result.ReofferedCourses))throw validationFailure(null,'source',orgUnitId,'INVALID_RESPONSE');
+      let row;
+      try{row=await validationRead(`orgstructure/${orgUnitId}`,'sourceMetadata',orgUnitId);}
+      catch(error){
+        if(error.httpStatus!==403)throw error;
+        return {orgUnitId,name:`Source Course ${orgUnitId}`,code:null,warning:`Source Course ${orgUnitId} validated. Its display name is unavailable (HTTP 403); the source ID will be used.`};
+      }
+      if(String(row?.Identifier)!==orgUnitId||typeof row?.Name!=='string')throw validationFailure(null,'sourceMetadata',orgUnitId,'INVALID_RESPONSE');
       return {orgUnitId,name:row.Name,code:row.Code??null};
     },
     async target(value){
-      configured();const orgUnitId=id(value),row=await api.read(`${root}/courses/${orgUnitId}`);
-      if(id(row.Identifier)!==orgUnitId || typeof row.Name!=='string'||typeof row.IsActive!=='boolean')throw Error('Target must be a Course Offering with a known active state.');
+      const orgUnitId=id(value),row=await validationRead(`courses/${orgUnitId}`,'replica',orgUnitId);
+      if(String(row?.Identifier)!==orgUnitId||typeof row?.Name!=='string'||typeof row?.IsActive!=='boolean')throw validationFailure(null,'replica',orgUnitId,'INVALID_RESPONSE');
       return {orgUnitId,name:row.Name,code:row.Code??null,isActive:row.IsActive};
     },
     async setActive(value,desired,beforeWrite){
