@@ -5,21 +5,23 @@ const { brazilDate }=require('./activityDates');
 const { terminal }=require('../services/bulkJobs');
 const escape=v=>String(v??'').replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const date=v=>v?new Intl.DateTimeFormat('pt-BR',{timeZone:'America/Sao_Paulo',dateStyle:'short',timeStyle:'medium'}).format(new Date(v)):'—';
-function createBulkDates({jobs,deploymentId,secret,writeEnabled,now=Date.now}) {
+function createBulkDates({jobs,deploymentId,secret,writeEnabled,now=Date.now,view,kind='dates'}) {
   if(!secret)throw new Error('Bulk forms require the configured application key.');
+  const prefix=kind==='sourceDeployment'?'/deploy':'/bulk';
   const guard=deploymentGuard(deploymentId);
   const owner=res=>createHash('sha256').update(JSON.stringify([res.locals.token.iss,res.locals.token.deploymentId,res.locals.token.user])).digest('hex');
   const session=res=>createHash('sha256').update(String(res.locals.ltik)).digest('hex');
   const signature=value=>createHmac('sha256',secret).update(value).digest('hex');
-  function token(res,action,id='') {const data=Buffer.from(JSON.stringify({action,id,session:session(res),expires:now()+30*60*1000})).toString('base64url');return `${data}.${signature(data)}`;}
+  function token(res,action,id='') {const data=Buffer.from(JSON.stringify({kind,action,id,session:session(res),expires:now()+30*60*1000})).toString('base64url');return `${data}.${signature(data)}`;}
   function valid(res,value,action,id='') {
     try {const [data,sig]=String(value).split('.');const expected=signature(data);if(sig.length!==expected.length||!timingSafeEqual(Buffer.from(sig),Buffer.from(expected)))return false;
-      const t=JSON.parse(Buffer.from(data,'base64url'));return t.session===session(res)&&t.action===action&&t.id===id&&t.expires>now();}catch{return false;}
+      const t=JSON.parse(Buffer.from(data,'base64url'));return t.kind===kind&&t.session===session(res)&&t.action===action&&t.id===id&&t.expires>now();}catch{return false;}
   }
   const hidden=(k,v)=>`<input type="hidden" name="${k}" value="${escape(v)}">`;
   function controls(res,action,id='') {return hidden('ltik',res.locals.ltik)+hidden('ticket',token(res,action,id))+hidden('jobId',id);}
-  function button(res,action,id,label,extra='') {return `<form method="post" action="/bulk/${action}" ${extra}>${controls(res,action,id)}<button>${escape(label)}</button></form>`;}
+  function button(res,action,id,label,extra='') {return `<form method="post" action="${prefix}/${action}" ${extra}>${controls(res,action,id)}<button>${escape(label)}</button></form>`;}
   function form(res) {
+    if(view)return view.form(res,{controls,button});
     return `<section><h1>Bulk Activity Date Manager</h1><p>Upload courses and apply the same dates to all Assignments, Quizzes and Discussion Topics, including undated activities.</p>
     <p>CSV headers: <code>OrgUnitId,OrgUnitCode</code>. Supply one ID or code per row. Limit: 100 rows, 16 KB, 1,000 activities. Duplicate courses are processed once.</p>
     <form method="post" action="/bulk/preview" id="bulk-input">${controls(res,'preview')}
@@ -32,6 +34,7 @@ function createBulkDates({jobs,deploymentId,secret,writeEnabled,now=Date.now}) {
     <script>document.getElementById('bulk-file').addEventListener('change',async function(){const f=this.files[0],m=document.getElementById('file-message'),t=document.getElementById('bulk-csv');if(!f)return;t.value='';if(f.size>16384){m.textContent='File exceeds 16 KB.';return;}try{t.value=new TextDecoder('utf-8',{fatal:true}).decode(await f.arrayBuffer());m.textContent='File loaded. Review dates, then validate.';}catch{m.textContent='Use a UTF-8 CSV file.';}});</script></section>`;
   }
   function render(res,job) {
+    if(view)return view.render(res,job,{controls,button,now});
     const permitted=job.tasks.every(t=>writeEnabled(t.activity.type));
     const active=['validating','planning','queued','running'].includes(job.status);
     const summary=job.tasks.reduce((out,t)=>{const s=t.result?.status||t.preview?.status||'pending';out[s]=(out[s]||0)+1;return out;},{});
@@ -58,26 +61,33 @@ function createBulkDates({jobs,deploymentId,secret,writeEnabled,now=Date.now}) {
     return true;
   }
   const handlers={form};
-  for(const action of ['preview','apply','status','cancel','history','report'])handlers[action]=async(req,res)=>{
+  for(const action of ['preview','apply','status','cancel','history','report','review','activate'])handlers[action]=async(req,res)=>{
     if(!authorize(req,res,action))return;
     try {
-      if(action==='history'){const list=await jobs.list(owner(res));return res.send(`<h1>My recent bulk jobs</h1>${list.map(j=>`<p>${escape(j.status)} · ${escape(j._id)}</p>${button(res,'status',j._id,'View job')}`).join('')}${form(res)}`);}
+      if(action==='history'){const list=await jobs.list(owner(res),kind);return res.send(`<h1>My recent bulk jobs</h1>${list.map(j=>`<p>${escape(j.status)} · ${escape(j._id)}</p>${button(res,'status',j._id,'View job')}`).join('')}${form(res)}`);}
       if(action==='preview'){
         let dates;
-        try {dates=Object.fromEntries(['start','due','end'].map(k=>[k,brazilDate(req.body[k])]));}
+        try {if(kind==='dates')dates=Object.fromEntries(['start','due','end'].map(k=>[k,brazilDate(req.body[k])]));}
         catch{return res.status(400).send(`<p>Enter all three valid Brasília date-times.</p>${form(res)}`);}
         let job;
-        try {job=await jobs.create({owner:owner(res),csv:req.body.csv,dates});}
+        try {job=await jobs.create({owner:owner(res),csv:req.body.csv,dates,kind});}
         catch(e){return res.status(400).send(`<p>${escape(['INVALID_CSV','INVALID_DATES','INVALID_DATE'].includes(e.code)?e.message:'Could not create preview. Check database availability.')}</p>${form(res)}`);}
         return res.send(render(res,job));
       }
-      const job=await jobs.get(req.body.jobId,owner(res));if(!job)return res.status(404).send('Job not found.');
+      const job=await jobs.get(req.body.jobId,owner(res));if(!job||(job.kind||'dates')!==kind)return res.status(404).send('Job not found.');
       if(action==='apply') {
-        if(!job.tasks.every(t=>writeEnabled(t.activity.type)))return res.status(403).send('A required write scope is unavailable.');
+        if(kind==='sourceDeployment'&&req.body.confirmReset!=='yes')return res.status(400).send('Confirm the reset of the listed replicas before deployment.');
+        if(!(view?view.canApply():job.tasks.every(t=>writeEnabled(t.activity.type))))return res.status(403).send('A required write scope is unavailable.');
         if(!await jobs.confirm(job._id,owner(res)))return res.status(409).send('Job expired, was already confirmed, or is not ready.');
       }
+      if(action==='activate'){
+        if(kind!=='sourceDeployment'||req.body.confirmCompleted!=='yes')return res.status(400).send('Confirm that copying has finished for all replicas in Brightspace before activation.');
+        if(!view.canApply())return res.status(403).send('Required scopes are unavailable.');
+        if(!await jobs.activate(job._id,owner(res)))return res.status(409).send('Activation is already queued or this job is not eligible.');
+      }
+      if(action==='review'){if(kind!=='sourceDeployment'||req.body.confirmReviewed!=='yes')return res.status(400).send('Confirm review in Brightspace.');if(!await jobs.review(job._id,owner(res)))return res.status(409).send('Job cannot be reviewed in its current state.');}
       if(action==='cancel'&&!await jobs.cancel(job._id,owner(res)))return res.status(409).send('Job is already processing or finished.');
-      if(action==='report') {res.set('Content-Type','text/csv; charset=utf-8');res.set('Content-Disposition','attachment; filename="bulk-date-results.csv"');return res.send(report(job));}
+      if(action==='report') {res.set('Content-Type','text/csv; charset=utf-8');res.set('Content-Disposition','attachment; filename="bulk-job-results.csv"');return res.send(view?view.report(job):report(job));}
       return res.send(render(res,await jobs.get(job._id,owner(res))));
     } catch {return res.status(503).send('Job storage is unavailable. Refresh or relaunch to check the saved status before retrying.');}
   };

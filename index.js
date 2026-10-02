@@ -19,6 +19,9 @@ const { createBulkJobs } = require('./src/services/bulkJobs');
 const { createBulkStore } = require('./src/services/bulkStore');
 const { createBulkDates } = require('./src/routes/bulkDates');
 const { createHash } = require('node:crypto');
+const { createSourceDeploymentClient } = require('./src/brightspace/sourceDeployment');
+const { createDeploymentJobs } = require('./src/services/deploymentJobs');
+const { createDeploymentView } = require('./src/routes/sourceDeployment');
 const lti = require('ltijs').Provider;
 
 // ===============================
@@ -144,11 +147,16 @@ const writers = Object.fromEntries(['assignment','quiz','discussionTopic'].map(t
 const writeEnabled = type => hasScope(D2L_OAUTH2_SCOPES, {assignment:'dropbox:folders:write',quiz:'quizzing:quizzes:write',discussionTopic:'discussions:topics:manage'}[type]);
 const activityDates = createActivityDates({writers,deploymentId:BS_DEPLOYMENT_ID,writeEnabled});
 const bulkStore = createBulkStore({uri:MONGODB_URL,namespace:createHash('sha256').update(`${BS_URL}|${BS_DEPLOYMENT_ID}`).digest('hex')});
-const bulkJobs = createBulkJobs({store:bulkStore,discovery,writers,writeEnabled,
-  courses:createCoursesClient({api:brightspace,baseUrl:BS_URL,lpVersion:process.env.D2L_LP_VERSION || '1.49'})});
+const lpVersion = process.env.D2L_LP_VERSION || '1.53';
+const sourceClient = createSourceDeploymentClient({api:brightspace,http:axios,oauth,baseUrl:BS_URL,lpVersion});
+const deployEnabled = () => hasScope(D2L_OAUTH2_SCOPES,'manageCourses:deploy:manage') && hasScope(D2L_OAUTH2_SCOPES,'orgunits:course:update');
+const deployment = createDeploymentJobs({client:sourceClient,enabled:deployEnabled});
+const bulkJobs = createBulkJobs({store:bulkStore,discovery,writers,writeEnabled,deployment,
+  courses:createCoursesClient({api:brightspace,baseUrl:BS_URL,lpVersion,sourceClient})});
 const bulkDates = createBulkDates({jobs:bulkJobs,deploymentId:BS_DEPLOYMENT_ID,secret:LTI_KEY,writeEnabled});
+const deploymentRoutes = createBulkDates({jobs:bulkJobs,deploymentId:BS_DEPLOYMENT_ID,secret:LTI_KEY,kind:'sourceDeployment',view:createDeploymentView({enabled:deployEnabled})});
 const diagnostics = createDiagnostics({
-  activityForm: res => bulkDates.form(res) + activityDates.form(res),
+  activityForm: res => bulkDates.form(res) + deploymentRoutes.form(res) + activityDates.form(res),
   client: discovery,
   deploymentId: BS_DEPLOYMENT_ID
 });
@@ -160,6 +168,10 @@ lti.app.post('/diagnostics/activity-dates/preview', activityDates.preview);
 lti.app.post('/diagnostics/activity-dates/apply', activityDates.apply);
 for (const action of ['preview','apply','status','cancel','history','report']) {
   lti.app.post(`/bulk/${action}`, bulkDates[action]);
+}
+
+for (const action of ['preview','apply','status','cancel','history','report','review','activate']) {
+  lti.app.post(`/deploy/${action}`, deploymentRoutes[action]);
 }
 
 // Health-check

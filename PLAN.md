@@ -37,3 +37,10 @@ Bulk implementation is locally tested. Live bulk end-to-end acceptance remains o
 5. Repeat the same dates and confirm unchanged. Check duplicate Apply, history/report access and interruption recovery in an isolated test environment.
 
 Future work: larger-scale job storage and paging, explicit cancellation during execution, operational monitoring/retention policy, and stronger coordination with edits made outside this application. These are not claimed as implemented.
+
+
+## Second workflow: Source Course deployment
+
+User requirement: deploy actual Source Course org units into existing production offerings supplied by CSV, using the native clean reset/deploy behavior. Implemented locally: mapping validation, source grouping, inactive-target checks, explicit reset confirmation, durable submission tracking, partial/uncertain outcomes, and manual outcome review. Date preparation now permits genuine Source Courses. This supersedes the earlier exclusion of Source Courses from future scope; Content and Forum date writes remain excluded.
+
+New requested extension: support active replicas by deactivating first and activating all successful replicas after completion, regardless of initial state. Automatic activation is not implemented. A successful deployment POST only confirms initiation; a trustworthy Source Course deployment completion signal must be established, or a separate manual completion-confirmation gate used. Fixed-delay activation is not considered confirmation. No live deployment has been executed.

@@ -128,3 +128,12 @@ This section supersedes earlier future-work notes. `courseCsv.js` parses bounded
 Read retries: optional two retries on transport, 429 and 5xx only. Short Retry-After is honored; waits above five seconds stop instead of retrying early. No write retries. Each PUT still has native read-back reconciliation. Systemic failures stop scheduling; 400/validation errors remain per-activity. This does not provide atomic cross-activity updates or eliminate the race with external edits between native read and PUT.
 
 Local tests include parser/resolver fixtures, stored-plan execution, validation barrier, duplicate confirmation, ownership/session/expiry controls, CSV report escaping, stale-date protection and Mongo query/recovery contracts. Live storage integration could not run because local MONGODB_URL is absent. The live course-lookup check was blocked at OAuth with invalid_grant. No bulk Brightspace writes were performed during implementation.
+
+
+## Source Course deployment implementation
+
+The native LP 1.53+ POST `/sourceCourses/{sourceId}/deploy` accepts `TargetCourseOfferingIds` and resets targets before deployment. `sourceDeployment.js` validates source identity via the source-specific reofferedCourses endpoint and target identity/inactive state through courses/{id}. It maps 200 numeric deployment IDs and 207 per-target failures; unexpected bodies or transport loss are uncertain, never automatically retried. No ordinary copy endpoint is used as a substitute, and deployment IDs are not assumed to be copy-job tokens.
+
+`deploymentJobs.js` validates every mapping before readiness and revalidates sources/targets before any POST. The existing worker dispatches by saved job kind, retaining the same global lease. Submission intent is persisted before the network call. Signed forms include workflow kind to prevent cross-flow token reuse. The saved job kind is checked on every action. User review is distinct from automatic completion. MongoDB retains accepted/uncertain deployments as overlapping-course reservations until review.
+
+The source/replica flow copies the components handled by Brightspace's native deployment; it does not assert a byte-for-byte clone of all course properties, user data or integrations. The current API contract has not supplied an automated completion endpoint for the returned source deployment ID. Native reset/deploy, copied dates, target activation timing and feature permissions still need controlled live acceptance. Automatic target inactivation/reactivation is not yet implemented.

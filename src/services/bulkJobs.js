@@ -4,17 +4,22 @@ const { parseCourseCsv } = require('./courseCsv');
 const { validateDates } = require('../brightspace/activityWriters');
 const TYPES=['assignment','quiz','discussionTopic'];
 const MAX_ACTIVITIES=1000;
-const terminal = new Set(['completed','completedWithErrors','failed','interrupted','cancelled']);
+const terminal = new Set(['completed','completedWithErrors','failed','interrupted','cancelled','submitted','submittedWithErrors','outcomeUnknown','reviewed','activated','activationWithErrors']);
 const counts = tasks => tasks.reduce((out,t)=>{const s=t.result?.status || 'pending';out[s]=(out[s]||0)+1;return out;},{total:tasks.length});
 function interruptJob(job) {
   job.status='interrupted';job.message='Processing stopped. Saved results are retained; create a fresh preview before retrying.';
+  if(job.kind==='sourceDeployment'&&job.operation==='activate'){
+    for(const task of job.tasks)for(const target of task.targets)if(target.activation?.status==='running')target.activation={status:'failed',writeAttempted:target.activation.writeAttempted,error:{message:'Activation interrupted. Recheck active state before retrying.'}};
+    job.status='activationWithErrors';job.message='Activation interrupted; deployment results are retained. Retry activation to read current states and finish.';return job;
+  }
   for(const task of job.tasks) {
     if(task.result?.status==='running')task.result={status:'failed',verifiedDates:null,writeAttempted:true,error:{category:'UNCERTAIN_OUTCOME',message:'Processing stopped during this activity. Read its current dates before retrying.'}};
     else if(!task.result)task.result={status:'skipped',writeAttempted:false,error:{message:'Not executed before interruption.'}};
   }
+  if(job.kind==='sourceDeployment'){job.message='Deployment processing was interrupted. Check Brightspace before any new submission; saved acceptance IDs remain available.';for(const task of job.tasks)if(task.result?.error?.category==='UNCERTAIN_OUTCOME'){task.result.status='uncertain';task.result.error.message='Deployment outcome is unknown. Check Brightspace before retrying.';}}
   job.totals=counts(job.tasks);return job;
 }
-function createBulkJobs({store,courses,discovery,writers,writeEnabled,now=Date.now}) {
+function createBulkJobs({store,courses,discovery,writers,writeEnabled,deployment,now=Date.now}) {
   let busy=false;
   const worker=randomUUID();
   async function save(job) { job.updatedAt=now();job.totals=counts(job.tasks);await store.save(job,worker); }
@@ -27,7 +32,7 @@ function createBulkJobs({store,courses,discovery,writers,writeEnabled,now=Date.n
         row.resolvedId=course.orgUnitId;
         if(resolved.has(course.orgUnitId)){row.status='duplicate';row.duplicateOf=resolved.get(course.orgUnitId);row.message='Same resolved course; processed once.';continue;}
         resolved.set(course.orgUnitId,row.row);row.status='valid';job.courses.push({...course,row:row.row,status:'pending'});
-      } catch(e) {row.status='invalid';row.message=e.status ? `Course unavailable or inaccessible (HTTP ${e.status}).` : 'Course could not be resolved uniquely as an accessible Course Offering. Check its identifier and LP API configuration.';}
+      } catch(e) {row.status='invalid';row.message=e.status ? `Course unavailable or inaccessible (HTTP ${e.status}).` : 'Course could not be resolved uniquely as an accessible Course Offering or Source Course. Check its identifier and LP API configuration.';}
       await save(job);
     }
     for (const course of job.courses) {
@@ -75,14 +80,18 @@ function createBulkJobs({store,courses,discovery,writers,writeEnabled,now=Date.n
     job.status=job.tasks.some(t=>['failed','skipped'].includes(t.result?.status))?'completedWithErrors':'completed';
   }
   return {
-    async create({owner,csv,dates}) {
+    async create({owner,csv,dates,kind='dates'}) {
+      if(kind==='sourceDeployment'){if(!deployment)throw Error('Deployment unavailable');const job={_id:randomUUID(),owner,kind,status:'validating',createdAt:now(),updatedAt:now(),rows:deployment.parse(csv),courses:[],tasks:[],totals:{total:0}};await store.insert(job);return job;}
+      if(kind!=='dates')throw Error('Invalid job type');
       dates=validateDates(dates);
       if(Date.parse(dates.start)>=Date.parse(dates.due))throw Object.assign(new Error('Bulk dates must satisfy Start < Due <= End, including Discussion Topics.'),{code:'INVALID_DATES'});
       const rows=parseCourseCsv(csv);
-      const job={_id:randomUUID(),owner,status:'validating',createdAt:now(),updatedAt:now(),dates,rows,courses:[],tasks:[],totals:{total:0}};
+      const job={_id:randomUUID(),owner,kind,status:'validating',createdAt:now(),updatedAt:now(),dates,rows,courses:[],tasks:[],totals:{total:0}};
       await store.insert(job);return job;
     },
-    get:(id,owner)=>store.get(id,owner), list:owner=>store.list(owner),
+    get:(id,owner)=>store.get(id,owner), list:(owner,kind)=>store.list(owner,kind),
+    activate:(id,owner)=>store.activate(id,owner,now()),
+    review:(id,owner)=>store.review(id,owner,now()),
     async confirm(id,owner) {return store.confirm(id,owner,now());},
     async cancel(id,owner) {return store.cancel(id,owner);},
     async tick() {
@@ -92,7 +101,15 @@ function createBulkJobs({store,courses,discovery,writers,writeEnabled,now=Date.n
         held=await store.acquire(worker);if(!held)return;
         heartbeat=setInterval(()=>store.renew(worker).catch(()=>{}),10000);heartbeat.unref?.();
         job=await store.claim(worker);if(!job)return;
-        if(job.status==='planning')await plan(job);else await execute(job);
+        if(job.status==='planning') {
+          if(job.kind==='sourceDeployment')await deployment.plan(job,save);else await plan(job);
+        } else {
+          const involved=job.kind==='sourceDeployment'?job.tasks.flatMap(t=>[t.sourceId,...t.targets.map(r=>r.orgUnitId)]):job.courses.map(c=>c.orgUnitId);
+          const blocked=store.blocked?await store.blocked(involved,job._id):false;
+          if(blocked){job.status='failed';job.message='A source or target has a deployment awaiting review in Brightspace. Review that job before modifying these courses.';}
+          else if(job.kind==='sourceDeployment')await deployment[job.operation==='activate'?'activate':'execute'](job,save,()=>store.renew(worker));
+          else await execute(job);
+        }
         await save(job);
       } catch {
         if(job) {interruptJob(job);

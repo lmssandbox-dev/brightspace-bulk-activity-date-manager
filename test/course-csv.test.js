@@ -28,3 +28,11 @@ test('resolver rejects unknown/ambiguous codes, wrong IDs and inaccessible/non-o
   const c=createCoursesClient({api:{read},baseUrl:'https://t.example',lpVersion:'1.49'});await assert.rejects(()=>c.get('1'));
  }
 });
+
+test('activity-date validation accepts genuine Source Courses only after source-specific validation',async()=>{
+ let sourceCalls=0;const sourceClient={source:async orgUnitId=>{sourceCalls++;return {orgUnitId,name:'Source',code:'SRC'};}};
+ const api={read:async()=>{throw Object.assign(Error('not offering'),{status:404});}};
+ const c=createCoursesClient({api,baseUrl:'https://tenant.example',lpVersion:'1.53',sourceClient});
+ assert.equal((await c.get('9531')).orgUnitId,'9531');assert.equal(sourceCalls,1);
+ api.read=async()=>{throw Object.assign(Error('forbidden'),{status:403});};await assert.rejects(()=>c.get('9531'));assert.equal(sourceCalls,1);
+});

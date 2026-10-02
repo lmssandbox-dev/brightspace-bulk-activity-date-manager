@@ -24,3 +24,18 @@ test('report escapes CSV and neutralizes spreadsheet formulas',()=>{
  const csv=report({dates:{},rows:[{row:2,orgUnitCode:'=HYPERLINK("bad")',status:'invalid'}],courses:[],tasks:[{activity:{type:'quiz',id:'1'},name:'@formula',preview:{status:'failed'}}]});
  assert.match(csv,/'=HYPERLINK\(""bad""\)/);assert.match(csv,/'@formula/);
 });
+
+test('deployment form requires reset confirmation and rejects cross-workflow tickets',async()=>{
+ const {createDeploymentView}=require('../src/routes/sourceDeployment');
+ const job={_id:'deploy-job',kind:'sourceDeployment',status:'ready',expiresAt:9999999,rows:[],tasks:[{sourceId:'10',sourceName:'Source',targets:[{orgUnitId:'20',name:'Replica'}],preview:{status:'ready'}}]};
+ let confirms=0;
+ const jobs={create:async()=>job,get:async()=>job,confirm:async()=>{confirms++;return true;}};
+ const routes=createBulkDates({jobs,deploymentId:'d',secret:'secret',kind:'sourceDeployment',view:createDeploymentView({enabled:()=>true}),now:()=>1000});
+ const res=response(),form=routes.form(res);
+ const pick=(html,action)=>html.match(new RegExp(`<form[^>]*action="/deploy/${action}"[^>]*>([\\s\\S]*?)</form>`))?.[1].match(/name="ticket" value="([^"]+)"/)[1];
+ await routes.preview({body:{ticket:pick(form,'preview'),csv:'SourceOrgUnitId,ReplicaOrgUnitId\n10,20'}},res);
+ assert.match(res.body,/reset all 1 listed replicas/);assert.match(res.body,/not verified completion/);
+ const body={jobId:'deploy-job',ticket:pick(res.body,'apply')};const noConfirm=response();await routes.apply({body},noConfirm);assert.equal(noConfirm.code,400);assert.equal(confirms,0);
+ await routes.apply({body:{...body,confirmReset:'yes'}},response());assert.equal(confirms,1);
+ const dates=setup();const wrong=response();await dates.routes.preview({body:{ticket:pick(form,'preview')}},wrong);assert.equal(wrong.code,403);
+});

@@ -170,7 +170,7 @@ Results show updated, unchanged, failed and skipped activities. Use **My recent 
 ### Configuration and operation
 
 - Keep the existing LTI/OAuth settings and `MONGODB_URL`. Bulk jobs use separate `bulk_date_jobs` and `bulk_date_locks` collections in the existing application database; no ltijs collections are changed.
-- LP API defaults to `1.49`; optionally set `D2L_LP_VERSION` to another supported version. Keep `D2L_LE_VERSION` configured.
+- LP API defaults to `1.53`; optionally set `D2L_LP_VERSION` to another supported version. Keep `D2L_LE_VERSION` configured.
 - Course validation needs `orgunits:course:read`; code lookup needs `organizations:organization:read`. Existing discovery scopes are also required. Applying needs the relevant Assignment, Quiz and Discussion write scopes, including supported wildcard equivalents, plus Service User permissions.
 - One bulk worker runs at a time across instances sharing the database and tenant/deployment namespace. Activities execute sequentially. Progress is persisted after each result. Transient GET failures have at most two retries, with bounded backoff and Retry-After handling; PUTs are never automatically retried.
 - Authentication/permission, throttling and systemic connection failures stop remaining writes; isolated activity failures do not discard earlier successes. Bulk operations are not transactions and do not roll back successful updates.
@@ -178,3 +178,24 @@ Results show updated, unchanged, failed and skipped activities. Use **My recent 
 - Cancel is available before processing starts or while a preview is ready. It does not cancel an already-running write job.
 
 Deploy the entire updated project and run `npm install` on Render (two direct dependencies were added: `csv-parse` and `mongodb`). Relaunch through LTI for the new workflow. The local tests cover CSV, resolution, planning, confirmation, execution, security and Mongo operation contracts. Live end-to-end bulk verification still requires a configured MongoDB connection and working OAuth token exchange.
+
+
+## Source Course deployment (second workflow)
+
+Use the separate **Source Course deployment** form:
+
+```csv
+SourceOrgUnitId,ReplicaOrgUnitId
+9531,12001
+9531,12002
+```
+
+Both IDs are required per row (100 rows / 16 KB maximum). These are example mappings, not approved live targets. The source must validate through the Source Course API; replicas must already exist as inactive Course Offerings. Repeated identical mappings are deduplicated; conflicting sources for one replica, self-deployment and source/target overlap block the entire plan. Preview is read-only. Explicit reset confirmation is required before submission.
+
+Configure `D2L_LP_VERSION` to **1.53 or later** (the new default is 1.53; explicitly configured 1.49 must be updated). Deployment needs `manageCourses:deploy:manage`, source validation needs `orgunits:sourcecourses:read`, and names/target validation need existing organization/course read scopes. Service User permissions and source enrollment must also permit deployment. Matching wildcards are accepted.
+
+Each source is submitted once with its target list using Brightspace's native reset-and-deploy endpoint. MongoDB saves the confirmed mapping, intent before POST, returned deployment IDs and per-target acceptance/failure. POSTs are never retried automatically. Lost responses remain uncertain. Existing date updates now also accept genuine Source Courses after source-specific validation when the Course Offering lookup returns 404.
+
+**Submitted does not mean copying finished.** The documented response reports initiation, and no documented SourceCourseDeployId-to-copy-job-token mapping has been established. Check target content and activity dates in Brightspace. The review action records your acknowledgement that you checked the outcomes and no job is still running; it does not claim automated completion verification. Courses with submitted/uncertain deployments are reserved against new bulk date/deployment jobs until review. Do not repeat deployment to check progress.
+
+The current deployment implementation requires inactive targets and does not automatically deactivate/reactivate them. The proposed extension is deactivate → verify inactive → deploy → confirm successful completion → activate → verify active, including targets that were initially inactive. Immediate or timer-based reactivation is intentionally not implemented while the completion signal remains unresolved. Live Source Course deployment acceptance is pending; no live reset/deploy was issued during development.

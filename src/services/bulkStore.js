@@ -15,12 +15,24 @@ function createBulkStore({uri,namespace,now=Date.now,leaseMs=120000,mongoClient}
   return {
     async insert(job) {const {jobs}=await collections();await jobs.insertOne({...job,namespace});},
     async get(_id,owner) {const {jobs}=await collections();return jobs.findOne({_id,owner,namespace});},
-    async list(owner) {const {jobs}=await collections();return jobs.find({owner,namespace},{projection:{_id:1,status:1,createdAt:1,totals:1}}).sort({createdAt:-1}).limit(20).toArray();},
+    async list(owner,kind) {const {jobs}=await collections();return jobs.find({owner,namespace,...(kind==='sourceDeployment'?{kind}:kind==='dates'?{$or:[{kind:'dates'},{kind:{$exists:false}}]}:{})},{projection:{_id:1,status:1,createdAt:1,totals:1}}).sort({createdAt:-1}).limit(20).toArray();},
+    async blocked(ids,excludeId) {
+      const {jobs}=await collections();
+      const pending=await jobs.find({namespace,_id:{$ne:excludeId},kind:'sourceDeployment',status:{$in:['submitted','submittedWithErrors','outcomeUnknown','interrupted','activationWithErrors','failed','queued','running']}}).toArray();
+      return pending.some(job=>job.tasks.some(t=>(t.targets.some(r=>r.deactivation) || (t.result?.writeAttempted && !['failed','skipped'].includes(t.result.status))) && [t.sourceId,...t.targets.map(r=>r.orgUnitId)].some(id=>ids.includes(id))));
+    },
+    async review(_id,owner,time) {
+      const {jobs}=await collections();return (await jobs.updateOne({_id,owner,namespace,kind:'sourceDeployment',status:{$in:['submitted','submittedWithErrors','outcomeUnknown','interrupted']}},{$set:{status:'reviewed',reviewedAt:time,message:'User acknowledged checking deployment outcomes in Brightspace. Submission results are retained; this is not automatic completion verification.'}})).modifiedCount===1;
+    },
+    async activate(_id,owner,time) {
+      const {jobs}=await collections();
+      return (await jobs.updateOne({_id,owner,namespace,kind:'sourceDeployment',status:{$in:['submitted','submittedWithErrors','outcomeUnknown','interrupted','failed','activationWithErrors']},'tasks.targets.deactivation':{$exists:true}},{$set:{status:'queued',operation:'activate',completionConfirmedAt:time,updatedAt:time},$unset:{expiresAt:''}})).modifiedCount===1;
+    },
     async confirm(_id,owner,time) {
       const {jobs}=await collections();return (await jobs.updateOne({_id,owner,namespace,status:'ready',expiresAt:{$gt:time}},{$set:{status:'queued',confirmedAt:time}})).modifiedCount===1;
     },
     async cancel(_id,owner) {
-      const {jobs}=await collections();return (await jobs.updateOne({_id,owner,namespace,status:{$in:['validating','ready','queued']}},{$set:{status:'cancelled',updatedAt:now()}})).modifiedCount===1;
+      const {jobs}=await collections();return (await jobs.updateOne({_id,owner,namespace,operation:{$ne:'activate'},status:{$in:['validating','ready','queued']}},{$set:{status:'cancelled',updatedAt:now()}})).modifiedCount===1;
     },
     async acquire(worker) {
       const {locks,jobs}=await collections();let lock;
