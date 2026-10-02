@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createAssignmentWriter, buildAssignmentPayload, validateDates } = require('../src/brightspace/assignmentWriter');
+const { createActivityWriter, buildAssignmentPayload, validateDates } = require('../src/brightspace/activityWriters');
 const { createAssignmentPut } = require('../src/brightspace/client');
 const fixture = require('./fixtures/assignment-write.json');
 const dates = { start:'2027-01-01T00:00:00.000Z', due:'2027-01-02T00:00:00.000Z', end:'2027-01-03T00:00:00.000Z' };
@@ -26,7 +26,7 @@ function setup(options = {}) {
     }
     if (options.putError) throw Object.assign(new Error('SECRET'), {status: options.putError});
   };
-  return { writer:createAssignmentWriter({api,put}), calls, current };
+  return { writer:createActivityWriter({api,put,type:'assignment'}), calls, current };
 }
 test('maps complete payload without replaying read-only fields or altering source', () => {
   const before = structuredClone(fixture);
@@ -144,7 +144,7 @@ test('HTTP 400 preserves selected validation messages but removes payload secret
 test('Assignment propagates sanitized HTTP 400 reason after unchanged read-back',async()=>{
   const current=structuredClone(fixture);const calls=[];
   const api={coursePath:()=> 'path',supportsLeVersion:()=>true,read:async()=>structuredClone(current)};
-  const writer=createAssignmentWriter({api,put:async()=>{calls.push('PUT');throw Object.assign(new Error('not displayed'),{status:400,validation:['Invalid date interval.']});}});
+  const writer=createActivityWriter({api,type:'assignment',put:async()=>{calls.push('PUT');throw Object.assign(new Error('not displayed'),{status:400,validation:['Invalid date interval.']});}});
   const result=await writer.updateActivityDates(request);
   assert.equal(result.status,'failed');assert.equal(result.error.httpStatus,400);assert.deepEqual(result.error.validation,['Invalid date interval.']);assert.equal(calls.length,1);
 });

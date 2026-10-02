@@ -90,7 +90,7 @@ function createBrightspaceClient({ get, leRoot }) {
 }
 
 // Keep the existing service-account token exchange and request safeguards.
-function createBrightspaceGet({ http, oauth, baseUrl }) {
+function createBrightspaceGet({ http, oauth, baseUrl, retries = 0, delay = ms => new Promise(resolve => setTimeout(resolve, ms)) }) {
   return async function get(path) {
     const url = new URL(path, baseUrl);
     if (url.origin !== new URL(baseUrl).origin || url.protocol !== 'https:') {
@@ -99,11 +99,24 @@ function createBrightspaceGet({ http, oauth, baseUrl }) {
     let token;
     try { token = await oauth.getAccessToken(); }
     catch { throw new ApiReadError(401, true); }
-    const response = await http({
-      timeout: 15000, maxRedirects: 0, method: 'GET', url: url.href,
-      headers: { Authorization: `Bearer ${token}` }
-    });
-    return response.data;
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const response = await http({
+          timeout: 15000, maxRedirects: 0, method: 'GET', url: url.href,
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        return response.data;
+      } catch (error) {
+        const status = error.response?.status;
+        if (attempt >= Math.min(retries, 2) || !(status == null || status === 429 || status >= 500)) throw error;
+        const retryAfter = error.response?.headers?.['retry-after'];
+        const wait = retryAfter == null ? 500 * 2 ** attempt + Math.floor(Math.random()*200)
+          : /^\d+(\.\d+)?$/.test(String(retryAfter)) ? Number(retryAfter)*1000 : Date.parse(retryAfter)-Date.now();
+        // Stop instead of retrying earlier than a long Retry-After asks us to.
+        if (!Number.isFinite(wait) || wait > 5000) throw error;
+        await delay(Math.max(0, wait));
+      }
+    }
   };
 }
 

@@ -1,96 +1,39 @@
 # Product plan
 
-## V1 product scope and architecture
+## Scope
 
-Scope reset accepted October 1, 2026. This document governs future V1 work; the original folder retains 01A/01B. This project now retains authentication and native-only discovery.
+Apply one selected Start, Due and End instant to every Assignment, Quiz and Discussion Topic in each Course Offering listed in a CSV. Existing undated activities are included. Courses already contain their activities; there is no cross-course activity matching or content copying.
 
-### Objective
+LTI controls human access through the LMS installation. The existing OAuth Service User performs API operations. No user-ID allowlist is introduced. Content, Discussion Forums, Source Courses, relative schedules and per-activity date editing remain outside bulk scope.
 
-Apply one selected Start, Due and End instant to every Assignment, Quiz and Discussion Topic in each Course Offering listed in a CSV. Courses already contain their activities, populated upstream by the SIS/content-copy process. Process courses independently; there is no equivalent-activity matching across courses.
+## Current stages
 
-The intended UI is CSV upload plus three date/time pickers, validation summary, confirmation and results. Final UI is not implemented. All three writers are implemented locally; Assignment is live-tested, Quiz and Discussion Topic live verification is pending.
-
-### Impact assessment
-
-| Decision | Existing components and consequence |
+| Stage | Status |
 |---|---|
-| ADD | Three native writers; explicit CSV input; Course Offering resolution/type validation; a server-side Batch Date Job; plan/execute boundary; bounded workers; retry policy; verification; per-row, per-course and per-activity results. |
-| DEFER | Source Course deployment, content copying, cross-course matching, Schedule Blueprints, relative schedules, per-activity editing, hierarchy editing, and writes to Content Modules, Content Topics or Discussion Forums. |
+| 01A — Authentication | Complete; architecture retained |
+| 01C — Native writers | Complete; user confirmed live preview/apply/unchanged behavior for all three types, including undated Assignment 1058 and Discussion Topic 868 |
+| 01D — CSV and Course Offering resolution | Implemented; explicit ID/code columns, exact code lookup, offering/access validation, row diagnostics and deduplication |
+| 01E — Bulk execution | Implemented; durable plans/results, atomic confirmation, serial execution, worker lease, stale-date guard and interrupted-job handling |
+| 01F — Minimal workflow | Implemented; upload/paste CSV, three date inputs, preview, Apply, progress/history and CSV report |
 
+Bulk implementation is locally tested. Live bulk end-to-end acceptance remains outstanding: local MongoDB is not configured and the latest token exchange returned invalid_grant. No bulk live updates have been attempted.
 
-### Module boundaries
+## Execution choices
 
-Keep the current working layout compact:
+- CSV: `OrgUnitId,OrgUnitCode`, exactly one nonblank identifier per row; no numeric-code inference. Validation errors block the entire job.
+- Limits: 100 CSV rows, 16 KB, 1,000 activities. Existing date/availability semantics are preserved by the shared writer; explicitly null availability uses configured course defaults.
+- Timezone: Brasília (`America/Sao_Paulo`), with existing date-picker round-trip validation. All dates are required; bulk requires Start < Due <= End to satisfy Discussion Topic rules.
+- Preview expires in 30 minutes and freezes activity identities. The writer reads fresh native settings and rejects changed dates. Already-correct dates return unchanged.
+- Storage: dedicated MongoDB application collections, separate from ltijs. Access is bound to the authenticated LTI user and deployment. Session-bound signed forms protect actions; Apply uses an atomic ready-to-queued transition.
+- One global bulk worker per tenant/deployment runs sequentially. GET retries are bounded; PUTs are never blindly repeated. Existing single-activity diagnostics remain available but should not be used concurrently on bulk targets.
+- Systemic API failures stop further writes. Isolated failures retain other results. No automatic rollback or resume. After interruption, reconcile using a fresh preview.
 
-```text
-index.js
-src/
-  config/          database configuration
-  brightspace/     authentication, API client, resource readers and mappings
-  services/        native activity discovery
-  routes/          diagnostic handlers
-scripts/           read-only acceptance tools
-test/              tests and JSON fixtures
-PLAN.md            product scope and roadmap
-TECHNICAL.md       contracts, safe writes and verification
-```
+## Next acceptance
 
-The client owns pagination, URL/version validation and API errors. Activity normalizers own native field mappings, availability descriptions and record warnings. Separate resource readers remain small so resource-specific behavior stays easy to locate.
+1. Deploy with existing MongoDB and OAuth configuration, including course-read scopes.
+2. Preview a CSV containing a known course ID and its code; verify one resolved course and correct counts, including undated activities.
+3. Try invalid, ambiguous and non-offering identifiers; ensure Apply is absent.
+4. Confirm an approved test batch; inspect per-activity read-back results and the LMS.
+5. Repeat the same dates and confirm unchanged. Check duplicate Apply, history/report access and interruption recovery in an isolated test environment.
 
-Create future modules only when implementing them: resource writers in `brightspace`, CSV validation and job orchestration in `services`, and application endpoints in `routes`. Keep parsing, planning and Brightspace payload handling separate without reserving empty folders. Split a module further only when its size or responsibilities warrant it. No new spike is implemented by this cleanup.
-
-#### Current simplification
-
-Source Course helpers, Content discovery, hierarchy and relationship resolution have been removed from this project at the user's request. The original project retains them. Native-only discovery is ready for the three V1 targets; forums serve only topic enumeration. Authentication remains unchanged. Future writes need a narrowly scoped transport and resource-specific payload preservation; the single-Assignment writer is now implemented, with live verification pending.
-
-### Input and planning contract
-
-Use explicit headers `OrgUnitId,OrgUnitCode`. Require exactly one nonblank identifier per data row. Trim surrounding whitespace; never classify a numeric code as an ID. Preserve code text, including leading zeros. Record source row numbers. Blank rows receive an explicit ignored-blank result; malformed headers/rows, invalid IDs, unknown or ambiguous codes, inaccessible offerings and other org-unit types receive structured errors. Flag duplicate rows and deduplicate again by resolved OrgUnitId so an ID and a code cannot schedule the same offering twice.
-
-Resolve and validate every row before any write. Verify Course Offering type and service-user accessibility, not merely a positive numeric ID. Discover targets and calculate counts before confirmation. Proposed conservative default: unresolved validation errors prevent `ready`; valid-subset execution would require an explicit future product decision. Do not silently drop invalid rows.
-
-Require all three timestamps. Convert local picker values using an explicit configured institution IANA timezone; reject ambiguous/nonexistent local times until an explicit disambiguation policy is chosen. Store UTC ISO instants and validate Start <= Due <= End. No silent rearrangement, inferred timezone, implicit clearing or ambiguous blank dates. Existing activities with null dates are still eligible targets.
-
-### Job and result contracts
-
-A server-side Batch Date Job owns `id`, `requestedDates`, validated courses, immutable confirmed plan, `status` and totals. States: validating, ready, running, completed, completedWithErrors, failed. Thousands of updates belong to this job, not independent browser requests. Persist progress through a repository abstraction; using a dedicated application collection in the existing database is a candidate, not a change to ltijs collections.
-
-Track course counts and activity totals including updated, unchanged, failed and skipped. Per-activity results retain courseOrgUnitId, activityKey, type, name, requestedDates, verifiedDates (null when unread), status and sanitized error category/reason/resource. Per-course results retain OrgUnitId/code, discovery counts by target type, status and aggregate results. Do not count a successful PUT as updated until read-back verifies it. Retain row-to-course provenance for downloadable reporting.
-
-Confirm the resolved plan and counts before execution. Execution uses bounded configurable concurrency across the whole job, including nested course/activity work; never unbounded Promise.all. Retry transient 429/5xx/network failures conservatively with capped attempts, backoff/jitter and Retry-After where available. Deterministic validation/permission failures are terminal for their target; systemic authentication or other unsafe conditions stop scheduling further writes. Preserve completed results and record unscheduled work. One isolated activity failure does not discard the batch.
-
-Each writer re-reads the native object, builds its version-specific valid update body, changes only dates, preserves availability types and unrelated settings, writes, then reads back. Compare current dates first and return unchanged when equal. After an uncertain write outcome, reconcile by re-reading before retrying; do not blindly replay a stale full PUT body. Reruns use fresh state and skip already-correct dates. This supports convergence, not an exactly-once guarantee or automatic rollback. Restart/resume and concurrent-job conflict policies must be defined before production bulk execution.
-
-LTI authorizes human access; the Service User performs API reads/writes. Preserve deployment/session validation and current LMS installation access control. Do not add the former user-ID allowlist. Decide any additional LTI role restrictions explicitly before production. Keep credentials and OAuth material server-side.
-
-## Revised implementation backlog
-
-Scope authority: [V1 product scope](#v1-product-scope-and-architecture), accepted October 1, 2026. No next spike is implemented by the reset.
-
-| Stage | Status / deliverable | Completion evidence |
-|---|---|---|
-| 01A — LTI + server-to-server authentication | COMPLETE; retain architecture | Existing authentication, token-cache and deployment/database guard coverage |
-| 01C — Safe native date writers | IN PROGRESS: Assignment live write confirmed by user, with writes occurring only after Apply. Quiz and Discussion Topic writers implemented locally; live acceptance pending | Valid full update mappings, preservation fixtures, all three dates, null existing dates, unchanged detection, read-back mismatch and error tests; explicitly authorized controlled live write verification |
-| 01D — CSV + Course Offering resolution | Planned | Explicit schema, row diagnostics, ID/code lookup, type/access checks, ambiguous/unknown codes, blanks, duplicates including ID/code aliases |
-| 01E — Bulk execution engine | Planned | Durable server-side plan/job/results, validation-before-write barrier, confirmation binding, bounded concurrency, retry caps, partial failures, read-back verification and reruns |
-| 01F — Minimal production UI | Planned | CSV + three date/time inputs, explicit timezone, validation summary, Cancel/Apply Dates, job progress/results and downloadable report |
-
-### Implementation sequence
-
-1. 01C: define requested-date validation and writer/result contracts. Confirm current tenant API payload requirements for the three targets. Add safe write transport and implement/test one writer at a time (Assignment, Quiz, Discussion Topic), retaining read-only diagnostics. Extract native-only discovery only where needed; keep native schema 3 discovery compatible. Do not build batch execution or final UI here.
-2. 01D: implement parser independently, then Course Offering lookup/validation adapter and resolver. Test numeric codes without ID inference and deduplication after resolution. These services return validation results and never update dates.
-3. 01E: implement plan construction first, then persisted job/result tracking, confirmation, bounded execution, retry/reconciliation and reruns. Target discovery includes undated activities and has no Content/Source Course dependency. Test that no write occurs before all CSV validation completes, and that concurrency stays bounded across courses.
-4. 01F: connect the minimal UI to server-side jobs, not per-activity request loops. Define institution timezone and DST behavior, production LTI access policy, upload limits, reporting and restart/resume behavior before release.
-
-### Decisions to settle within their owning spike
-
-- 01C: exact supported tenant write contracts/scopes and preservation requirements; concurrency conflict handling for full-object PUTs.
-- 01D: exact code lookup capability and duplicate-code policy; propose rejecting ambiguous resolution.
-- 01E: job storage, queue/worker lifecycle, cancellation/resume, concurrent overlapping jobs, retry/concurrency defaults and plan freshness. Proposed default blocks execution on validation errors; any valid-subset mode must be explicit.
-- 01F: institution timezone source, DST disambiguation, size limits and access restrictions. No ambiguous missing-date behavior: all three dates are required in V1.
-
-### Current 01C acceptance
-
-Assignment: user confirmed successful live date updates and that Preview alone makes no changes. Quiz and Discussion Topic: fixture tests pass; deploy and test one known native activity of each type, check preservation in the LMS, and rerun identical dates for unchanged. Discussion calendar-field availability is an unresolved compatibility check. Do not mark 01C complete or start bulk execution until these checks pass.
-
-Assignment local live acceptance: Course 9524 / Assignment 983 updated with the approved valid interval; read-back matched and identical rerun returned unchanged without PUT. The equal-date HTTP 400 is resolved by pre-write validation. Quiz and Discussion Topic live acceptance remain pending.
+Future work: larger-scale job storage and paging, explicit cancellation during execution, operational monitoring/retention policy, and stronger coordination with edits made outside this application. These are not claimed as implemented.

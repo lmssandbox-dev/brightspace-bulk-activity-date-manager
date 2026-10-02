@@ -58,7 +58,7 @@ The runner assumes the operator supplied Course Offering IDs; type resolution is
 
 ## Implemented Assignment writer
 
-Contract: `createAssignmentWriter({api, put}).updateActivityDates({orgUnitId, activity, dates, dryRun})`. Activity must identify an Assignment and, if supplied, its key/course must agree. `dates` requires start, due and end timezone-aware instants, ordered without losing sub-millisecond precision. The CLI defaults to dryRun; internal calls default to execution.
+Contract: `createActivityWriter({api, put, type}).updateActivityDates({orgUnitId, activity, dates, dryRun})`. Activity must identify an Assignment and, if supplied, its key/course must agree. `dates` requires start, due and end timezone-aware instants, ordered without losing sub-millisecond precision. The CLI defaults to dryRun; internal calls default to execution.
 
 The payload explicitly maps DropboxFolder to DropboxFolderUpdateData, converts RichText instructions to RichTextInput, retains availability types, and includes SubmissionRule for LE >=1.98. It does not replay read-only fields. Missing core preservation settings or invalid availability types block the write. Explicit null types are omitted to use documented course defaults. Null Assignment Availability is expanded into the requested dates without invented types. Fields documented to preserve their current value when omitted are not required in the read response. Undated Assignments are supported with known or explicitly null availability. Verification allows defaults to resolve only for types omitted in the request; explicit types and all other mapped settings remain checked.
 
@@ -66,13 +66,13 @@ The Assignment-only transport restricts PUT URLs to the configured HTTPS tenant,
 
 Returned settings are compared conservatively; server-side formatting changes can produce SETTINGS_CHANGED requiring inspection. Full-object read/modify/PUT is not atomic, so concurrent human edits can still be overwritten between read and write. Use an isolated test activity; concurrent-job coordination remains future work. Rubrics/attachments are excluded from the update payload, rather than recreated. No bulk retry, rollback or exactly-once guarantee is implemented.
 
-Live acceptance target supplied by the user: Course Offering **9524**, Assignment **983**. Requested dates/timezone are still pending. Local code has no configured credentials/dependencies; the operator command must run in a configured environment. No live update has been performed. Run dry first, inspect the result, apply the intended values, then rerun to verify unchanged; manually confirm instructions, grading, visibility and availability in the LMS. Quiz and Discussion Topic writers follow once this writer is accepted.
+Live acceptance: Assignment 983 and Quiz 2301 in Course 9524 were updated and read back successfully; identical reruns returned unchanged. The user subsequently confirmed preview/apply/unchanged verification for undated Assignment 1058 and Discussion Topic 868 (Forum 617). This cleanup was verified locally and did not repeat live writes.
 
 Sources checked October 1, 2026: [Assignment read/update contract](https://docs.valence.desire2learn.com/res/dropbox.html#Dropbox.DropboxFolderUpdateData) and [RichTextInput](https://docs.valence.desire2learn.com/basic/conventions.html#term-RichTextInput).
 
 ## LTI Assignment test form
 
-`src/routes/assignmentDates.js` provides protected POST preview/apply handlers. Both check the validated ltijs session and deployment. Forms carry the LTI token in the POST body. Random server-side tickets expire after ten minutes and are bound to a hash of the session. Apply consumes its ticket before awaiting the writer and ignores replacement IDs/dates submitted by the browser. It uses the stored preview values.
+`src/routes/activityDates.js` provides protected POST preview/apply handlers. Both check the validated ltijs session and deployment. Forms carry the LTI token in the POST body. Random server-side tickets expire after ten minutes and are bound to a hash of the session. Apply consumes its ticket before awaiting the writer and ignores replacement IDs/dates submitted by the browser. It uses the stored preview values.
 
 Date-time inputs use explicit Brasília UTC−03:00 with IANA timezone round-trip validation. Now captures one instant at preview time, fixed through apply. Results are escaped, non-cacheable and use no-referrer policy. Scope availability is enforced server-side. No raw Brightspace payload is accepted from the browser.
 
@@ -84,13 +84,13 @@ The writer no longer requires every documented read property to be present. Miss
 
 ### Explicit and wildcard scopes
 
-The web form and Assignment CLI share a scope matcher. For Assignment writes it accepts `dropbox:folders:write`, `dropbox:folders:*`, `dropbox:*:*`, and action lists such as `dropbox:folders:read,write`. Scope entries are separated by whitespace. Matching is exact within each component; unrelated scopes, read-only grants and `core:*:*` alone do not enable this local write control.
+The web form and activity CLI share a scope matcher. For Assignment writes it accepts `dropbox:folders:write`, `dropbox:folders:*`, `dropbox:*:*`, and action lists such as `dropbox:folders:read,write`. Scope entries are separated by whitespace. Matching is exact within each component; unrelated scopes, read-only grants and `core:*:*` alone do not enable this local write control.
 
 The matching scope must be in the app's `D2L_OAUTH2_SCOPES`, not only the Brightspace registration. This controls the local UI/CLI gate; Brightspace still enforces token grants and Service User permissions. OAuth scope requests and credentials are unchanged.
 
 ## Quiz and Discussion Topic implementation
 
-`src/brightspace/nativeWriters.js` contains explicit resource payload builders and the common read/validate/write/read-back flow for Quiz and Discussion Topic. It reuses requested-date validation from the Assignment writer. The proven Assignment path remains unchanged. `createActivityPut` restricts each transport instance to one native resource path; the Assignment transport remains a wrapper with its original restriction.
+`src/brightspace/activityWriters.js` contains explicit payload builders for Assignments, Quizzes and Discussion Topics, with one shared read/validate/write/read-back flow and date validation. `createActivityPut` restricts each transport instance to one native resource path; the Assignment transport remains a wrapper with its original restriction.
 
 Quiz mapping converts all four RichText containers and maps AttemptsAllowed to NumberOfAttemptsAllowed. It preserves timing, access, password, grading, paging and display settings. IsSingleSession is required from LE 1.92; AnnotationToolsEnabled from 1.98. Missing full-PUT preservation fields fail with named diagnostics. The Service User must have sufficient access to see the real settings, including passwords/email; a permission-hidden null cannot be distinguished from an unset value solely from the read contract. Verify this permission configuration before production use.
 
@@ -113,4 +113,18 @@ Local retry of the exact rejected timestamps for Course 9524 / Assignment 983 re
 
 ### Undated availability handling
 
-Read-only tenant checks confirmed Assignment 1058 in Course 9524 returns DueDate:null and Availability:null; Topic 868 in Forum 617 returns null dates and null availability types. Both writers now omit explicitly unspecified types, following the org-unit default behavior documented in [Assignments](https://docs.valence.desire2learn.com/res/dropbox.html) and [Discussions](https://docs.valence.desire2learn.com/res/discuss.html). They preserve explicit types and reject missing or invalid type values. No hard-coded access mode is selected. Read-back still validates all returned types and compares explicit types and unrelated settings. Live writes for these two undated targets remain untested.
+Read-only tenant checks confirmed Assignment 1058 in Course 9524 returns DueDate:null and Availability:null; Topic 868 in Forum 617 returns null dates and null availability types. Both writers now omit explicitly unspecified types, following the org-unit default behavior documented in [Assignments](https://docs.valence.desire2learn.com/res/dropbox.html) and [Discussions](https://docs.valence.desire2learn.com/res/discuss.html). They preserve explicit types and reject missing or invalid type values. No hard-coded access mode is selected. Read-back still validates all returned types and compares explicit types and unrelated settings. The user subsequently confirmed successful preview/apply/unchanged verification for both undated targets.
+
+## Current bulk implementation (01D–01F)
+
+This section supersedes earlier future-work notes. `courseCsv.js` parses bounded UTF-8 CSV with `csv-parse`, records row numbers and distinguishes IDs from codes. `courses.js` uses LP `/orgstructure/?exactOrgUnitCode=...` with existing pagination and `/courses/{id}` to validate offering type and access ([org structure](https://docs.valence.desire2learn.com/res/orgunit.html), [courses](https://docs.valence.desire2learn.com/res/course.html)). LP defaults to 1.49; no LE version is reused for LP.
+
+`bulkJobs.js` resolves every row before discovery, previews every activity with the existing writer and blocks confirmation if any row/course/activity fails. The plan stores only native identities, summaries and dates, not credentials or raw native update payloads. Confirmation freezes the plan; native settings are re-read for each write. Optional `expectedDates` on `activityWriters.js` prevents overwriting dates changed since preview. An already-matching target is unchanged even if its old preview is stale.
+
+`bulkStore.js` uses `bulk_date_jobs` and `bulk_date_locks` in the existing application database. Atomic owner/status/expiry predicates prevent repeated Apply. The global 120-second lease is renewed every ten seconds and before writes. One serial worker avoids nested concurrency and overlapping bulk jobs. Saves require the same worker and active job status. Expired-worker recovery marks jobs interrupted without re-executing them. Persisted running activities are marked uncertain; unscheduled activities are skipped. Reports are retained without automatic deletion; the UI lists the last 20 jobs for the authenticated owner.
+
+`bulkDates.js` exposes protected POST preview/apply/status/cancel/history/report routes. LTI deployment and user are checked on every request. HMAC forms bind action, job, expiry and LTI session; ownership is checked in MongoDB. Tokens remain in POST bodies. Upload reads a selected file into the bounded CSV text form; server-side parsing remains authoritative. Output is HTML-escaped and CSV cells are quoted and protected against formula injection. No GET performs a write.
+
+Read retries: optional two retries on transport, 429 and 5xx only. Short Retry-After is honored; waits above five seconds stop instead of retrying early. No write retries. Each PUT still has native read-back reconciliation. Systemic failures stop scheduling; 400/validation errors remain per-activity. This does not provide atomic cross-activity updates or eliminate the race with external edits between native read and PUT.
+
+Local tests include parser/resolver fixtures, stored-plan execution, validation barrier, duplicate confirmation, ownership/session/expiry controls, CSV report escaping, stale-date protection and Mongo query/recovery contracts. Live storage integration could not run because local MONGODB_URL is absent. The live course-lookup check was blocked at OAuth with invalid_grant. No bulk Brightspace writes were performed during implementation.

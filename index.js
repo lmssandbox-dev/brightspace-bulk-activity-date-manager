@@ -6,15 +6,19 @@ require('dotenv').config();
 const axios = require('axios');
 const { createBrightspaceAuth } = require('./src/brightspace/auth');
 const { databaseConfig } = require('./src/config/database');
-const { createBrightspaceClient, createBrightspaceGet, createAssignmentPut, createActivityPut, hasScope } = require('./src/brightspace/client');
+const { createBrightspaceClient, createBrightspaceGet, createActivityPut, hasScope } = require('./src/brightspace/client');
 const { createAssignmentsClient } = require('./src/brightspace/activities/assignments');
 const { createQuizzesClient } = require('./src/brightspace/activities/quizzes');
 const { createDiscussionsClient } = require('./src/brightspace/activities/discussions');
 const { createActivityDiscovery } = require('./src/services/activityDiscovery');
 const { createDiagnostics } = require('./src/routes/discoveryDiagnostics');
-const { createNativeWriter } = require('./src/brightspace/nativeWriters');
-const { createAssignmentWriter } = require('./src/brightspace/assignmentWriter');
-const { createAssignmentDates } = require('./src/routes/assignmentDates');
+const { createActivityWriter } = require('./src/brightspace/activityWriters');
+const { createActivityDates } = require('./src/routes/activityDates');
+const { createCoursesClient } = require('./src/brightspace/courses');
+const { createBulkJobs } = require('./src/services/bulkJobs');
+const { createBulkStore } = require('./src/services/bulkStore');
+const { createBulkDates } = require('./src/routes/bulkDates');
+const { createHash } = require('node:crypto');
 const lti = require('ltijs').Provider;
 
 // ===============================
@@ -86,7 +90,7 @@ const oauth = createBrightspaceAuth({
   http: axios
 });
 
-const d2lGet = createBrightspaceGet({ http: axios, oauth, baseUrl: BS_URL });
+const d2lGet = createBrightspaceGet({ http: axios, oauth, baseUrl: BS_URL, retries: 2 });
 
 // ===============================
 // Setup ltijs (LTI 1.3 Provider)
@@ -135,17 +139,16 @@ const discovery = createActivityDiscovery({
   quizzes: createQuizzesClient(brightspace),
   discussions: createDiscussionsClient(brightspace)
 });
-const assignmentDates = createAssignmentDates({
-  writers: {
-    assignment: createAssignmentWriter({ api: brightspace, put: createAssignmentPut({ http: axios, oauth, leRoot }) }),
-    quiz: createNativeWriter({ api: brightspace, type: 'quiz', put: createActivityPut({ http: axios, oauth, leRoot, type: 'quiz' }) }),
-    discussionTopic: createNativeWriter({ api: brightspace, type: 'discussionTopic', put: createActivityPut({ http: axios, oauth, leRoot, type: 'discussionTopic' }) })
-  },
-  deploymentId: BS_DEPLOYMENT_ID,
-  writeEnabled: type => hasScope(D2L_OAUTH2_SCOPES, { assignment: 'dropbox:folders:write', quiz: 'quizzing:quizzes:write', discussionTopic: 'discussions:topics:manage' }[type])
-});
+const writers = Object.fromEntries(['assignment','quiz','discussionTopic'].map(type => [type,
+  createActivityWriter({api:brightspace,type,put:createActivityPut({http:axios,oauth,leRoot,type})})]));
+const writeEnabled = type => hasScope(D2L_OAUTH2_SCOPES, {assignment:'dropbox:folders:write',quiz:'quizzing:quizzes:write',discussionTopic:'discussions:topics:manage'}[type]);
+const activityDates = createActivityDates({writers,deploymentId:BS_DEPLOYMENT_ID,writeEnabled});
+const bulkStore = createBulkStore({uri:MONGODB_URL,namespace:createHash('sha256').update(`${BS_URL}|${BS_DEPLOYMENT_ID}`).digest('hex')});
+const bulkJobs = createBulkJobs({store:bulkStore,discovery,writers,writeEnabled,
+  courses:createCoursesClient({api:brightspace,baseUrl:BS_URL,lpVersion:process.env.D2L_LP_VERSION || '1.49'})});
+const bulkDates = createBulkDates({jobs:bulkJobs,deploymentId:BS_DEPLOYMENT_ID,secret:LTI_KEY,writeEnabled});
 const diagnostics = createDiagnostics({
-  assignmentForm: assignmentDates.form,
+  activityForm: res => bulkDates.form(res) + activityDates.form(res),
   client: discovery,
   deploymentId: BS_DEPLOYMENT_ID
 });
@@ -153,8 +156,11 @@ lti.onConnect(diagnostics.launch);
 // Not whitelisted: ltijs validates the LTI session before this handler runs.
 lti.app.get('/diagnostics/activities', diagnostics.activities);
 // Protected POST routes; preview/apply tickets are bound to the validated LTI session.
-lti.app.post('/diagnostics/assignment-dates/preview', assignmentDates.preview);
-lti.app.post('/diagnostics/assignment-dates/apply', assignmentDates.apply);
+lti.app.post('/diagnostics/activity-dates/preview', activityDates.preview);
+lti.app.post('/diagnostics/activity-dates/apply', activityDates.apply);
+for (const action of ['preview','apply','status','cancel','history','report']) {
+  lti.app.post(`/bulk/${action}`, bulkDates[action]);
+}
 
 // Health-check
 lti.app.get('/ping', (req, res) => {
@@ -167,6 +173,8 @@ lti.app.get('/ping', (req, res) => {
 const start = async () => {
   try {
     await lti.deploy({ port });
+    const bulkTimer = setInterval(() => { void bulkJobs.tick(); }, 2000);
+    bulkTimer.unref();
     if (!BS_DEPLOYMENT_ID?.trim()) {
       console.log('Setup mode: launches are blocked until BS_DEPLOYMENT_ID is configured. Key endpoints remain available.');
     }

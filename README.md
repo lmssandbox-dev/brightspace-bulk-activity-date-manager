@@ -59,7 +59,7 @@ The native-only response uses `schemaVersion: 3`, with `orgUnitId`, `complete`, 
 - `discussions:forums:readonly`
 - `discussions:topics:readonly`
 
-Set `D2L_LE_VERSION` to a tenant-supported version >=1.90. LP version, Content scopes and Source Course scopes are no longer required. The discovery app requires no write scopes. The separate Assignment CLI requires `dropbox:folders:write` only when applying changes.
+Set `D2L_LE_VERSION` to a tenant-supported version >=1.90. LP version, Content scopes and Source Course scopes are no longer required. The discovery app requires no write scopes. The separate activity CLI requires `dropbox:folders:write` only when applying changes.
 
 ## Organization
 
@@ -78,23 +78,23 @@ TECHNICAL.md                 data contract, safe writes and verification
 
 See [PLAN.md](PLAN.md) for scope and implementation sequence, and [TECHNICAL.md](TECHNICAL.md) for the data contract, safe-write requirements and verification.
 
-## 01C — single Assignment dates
+## 01C — single activity dates
 
-`src/brightspace/assignmentWriter.js` reads the native Assignment, validates all three requested dates, preserves settings, updates and verifies. The discovery route remains read-only; the Assignment test form has separate protected POST routes. This operator command uses the configured Service User directly and is not a public endpoint.
+`src/brightspace/activityWriters.js` handles Assignments, Quizzes and Discussion Topics: it reads the native activity, validates all three requested dates, preserves settings, updates and verifies. The discovery route remains read-only; the Assignment test form has separate protected POST routes. This operator command uses the configured Service User directly and is not a public endpoint.
 
 After installing dependencies and configuring `.env`, preview without writing:
 
 ```sh
-npm run assignment:dates -- 9524 983 '2027-01-01T09:00:00-03:00' '2027-01-02T23:59:00-03:00' '2027-01-03T23:59:00-03:00'
+npm run activity:dates -- assignment 9524 983 '2027-01-01T09:00:00-03:00' '2027-01-02T23:59:00-03:00' '2027-01-03T23:59:00-03:00'
 ```
 
 Those are example dates, not approved live-test values. Append `--apply` only when the target and dates are intended. Register `dropbox:folders:write` and include it in the operator environment's OAuth scopes for an apply run; retain the necessary read scopes and Service User permissions. No registration, scopes or live data were changed during implementation.
 
 The result is `ready` (dry run), `unchanged`, `updated` (verified), or `failed`, with requested/verified dates and a sanitized error. Explicit availability types are preserved. Null types (including null Assignment Availability) use Brightspace’s configured course defaults when dates are added; invalid or missing type fields still block updates. See [TECHNICAL.md](TECHNICAL.md) for limits and live acceptance.
 
-## Assignment test form on Render
+## Activity test form on Render
 
-Deploy the updated `index.js` and complete `src/` folder, then relaunch through Brightspace. The page includes **Assignment date test — 01C** below discovery.
+Deploy the updated `index.js` and complete `src/` folder, then relaunch through Brightspace. The page includes **Activity date test — 01C** below discovery.
 
 Enter Course Offering ID `9524` and Assignment ID `983`. Enter three Brasília date-times, with Start earlier than End. Review the result, then choose **Apply these dates**. Assignments reject equal start/end dates. Preview makes no writes; apply uses exactly the previewed dates and re-reads/verifies the Assignment.
 
@@ -104,7 +104,7 @@ Confirmation tickets last ten minutes and are bound to the LTI session. This dia
 
 ### Explicit and wildcard scopes
 
-The web form and Assignment CLI share a scope matcher. For Assignment writes it accepts `dropbox:folders:write`, `dropbox:folders:*`, `dropbox:*:*`, and action lists such as `dropbox:folders:read,write`. Scope entries are separated by whitespace. Matching is exact within each component; unrelated scopes, read-only grants and `core:*:*` alone do not enable this local write control.
+The web form and activity CLI share a scope matcher. For Assignment writes it accepts `dropbox:folders:write`, `dropbox:folders:*`, `dropbox:*:*`, and action lists such as `dropbox:folders:read,write`. Scope entries are separated by whitespace. Matching is exact within each component; unrelated scopes, read-only grants and `core:*:*` alone do not enable this local write control.
 
 The matching scope must be in the app's `D2L_OAUTH2_SCOPES`, not only the Brightspace registration. This controls the local UI/CLI gate; Brightspace still enforces token grants and Service User permissions. OAuth scope requests and credentials are unchanged.
 
@@ -132,6 +132,49 @@ npm run check
 npm run verify:discovery -- 9524
 ```
 
-Fill `.env` with the existing Render API version, key ID and matching private key before live API calls. Keep secrets out of chat and version control. The template already has the tenant, OAuth client ID and native-tool scopes. Verify the token endpoint matches Render. Local API scripts need neither MongoDB nor an LTI launch; `npm start` still requires the full web configuration. The Assignment CLI is dry-run unless `--apply` is supplied. Do not deploy `.local-tools`, `.env` or `node_modules`; keep `package-lock.json` for reproducible installs.
+Fill `.env` with the existing Render API version, key ID and matching private key before live API calls. Keep secrets out of chat and version control. The template already has the tenant, OAuth client ID and native-tool scopes. Verify the token endpoint matches Render. Local API scripts need neither MongoDB nor an LTI launch; `npm start` still requires the full web configuration. The activity CLI is dry-run unless `--apply` is supplied. Do not deploy `.local-tools`, `.env` or `node_modules`; keep `package-lock.json` for reproducible installs.
 
 Assignment previews now require **Start < End**; the API confirmed that equal start/end dates cause HTTP 400. Enter dates manually and use Preview selected dates.
+
+
+### Unified terminal helper
+
+`scripts/write-activity.js` calls the same `createActivityWriter` used by the app. Preview syntax:
+
+```sh
+npm run activity:dates -- assignment <courseId> <assignmentId> <startISO> <dueISO> <endISO>
+npm run activity:dates -- quiz <courseId> <quizId> <startISO> <dueISO> <endISO>
+npm run activity:dates -- discussionTopic <courseId> <topicId> <startISO> <dueISO> <endISO> <forumId>
+```
+
+Append `--apply` to save. Write scopes are `dropbox:folders:write`, `quizzing:quizzes:write`, and `discussions:topics:manage` respectively; equivalent wildcards are supported. Inputs require timezone-aware date-times. Assignment Start must precede End; Discussion Start must precede Due; all types require Start ≤ Due ≤ End.
+
+`src/routes/activityDates.js` serves the shared form and protected POST endpoints `/diagnostics/activity-dates/preview` and `/diagnostics/activity-dates/apply`. Relaunch through LTI after deploying this rename to obtain a fresh form.
+
+## CSV bulk updates
+
+The LTI launch now includes **Bulk Activity Date Manager**. Upload a UTF-8 CSV (or paste its contents), select Start/Due/End in Brasília time, then choose **Validate and preview**.
+
+```csv
+OrgUnitId,OrgUnitCode
+9524,
+,COURSE_CODE
+```
+
+Use exactly one identifier per row. Numeric codes stay codes; leading zeroes are preserved. Both headers are required. IDs are checked through the Course Offering endpoint, and codes use exact lookup followed by the same check. Invalid/inaccessible/non-offering or ambiguous rows block the whole job. Duplicate inputs and ID/code aliases schedule the course once. Limits: 16 KB, 100 rows and 1,000 activities per job.
+
+Validation and discovery run in the background without writes, including undated activities. A completed preview lists resolved courses, row issues, every activity, current dates and the requested dates. **Apply dates to these activities** confirms the saved plan; browser-submitted replacements cannot alter it. The preview expires after 30 minutes. New activities added after preview are not included. Changed dates produce a per-activity `STALE_PREVIEW` failure unless they already match the requested dates.
+
+Results show updated, unchanged, failed and skipped activities. Use **My recent jobs** to return after closing the page and **Download CSV report** for row and activity results (UTC dates). Current/verified dates are displayed in Brasília time on the page.
+
+### Configuration and operation
+
+- Keep the existing LTI/OAuth settings and `MONGODB_URL`. Bulk jobs use separate `bulk_date_jobs` and `bulk_date_locks` collections in the existing application database; no ltijs collections are changed.
+- LP API defaults to `1.49`; optionally set `D2L_LP_VERSION` to another supported version. Keep `D2L_LE_VERSION` configured.
+- Course validation needs `orgunits:course:read`; code lookup needs `organizations:organization:read`. Existing discovery scopes are also required. Applying needs the relevant Assignment, Quiz and Discussion write scopes, including supported wildcard equivalents, plus Service User permissions.
+- One bulk worker runs at a time across instances sharing the database and tenant/deployment namespace. Activities execute sequentially. Progress is persisted after each result. Transient GET failures have at most two retries, with bounded backoff and Retry-After handling; PUTs are never automatically retried.
+- Authentication/permission, throttling and systemic connection failures stop remaining writes; isolated activity failures do not discard earlier successes. Bulk operations are not transactions and do not roll back successful updates.
+- After worker loss, the 120-second lease expires and the next worker marks unfinished jobs interrupted. Saved successes remain; an in-flight activity is marked uncertain, and unscheduled ones are skipped. There is no automatic resume. Create a fresh preview to reconcile actual dates before applying again.
+- Cancel is available before processing starts or while a preview is ready. It does not cancel an already-running write job.
+
+Deploy the entire updated project and run `npm install` on Render (two direct dependencies were added: `csv-parse` and `mongodb`). Relaunch through LTI for the new workflow. The local tests cover CSV, resolution, planning, confirmation, execution, security and Mongo operation contracts. Live end-to-end bulk verification still requires a configured MongoDB connection and working OAuth token exchange.

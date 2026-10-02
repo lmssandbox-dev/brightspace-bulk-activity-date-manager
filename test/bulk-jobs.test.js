@@ -1,0 +1,42 @@
+'use strict';
+const test=require('node:test'),assert=require('node:assert/strict');
+const {createBulkJobs,interruptJob}=require('../src/services/bulkJobs');
+const dates={start:'2027-01-01T00:00:00Z',due:'2027-01-02T00:00:00Z',end:'2027-01-03T00:00:00Z'};
+function setup(options={}) {
+ const data=new Map(),calls=[];let held=false;
+ const store={insert:async j=>data.set(j._id,structuredClone(j)),get:async(id,owner)=>{const j=data.get(id);return j?.owner===owner?structuredClone(j):null;},list:async owner=>[...data.values()].filter(j=>j.owner===owner),
+ acquire:async()=>{if(held)return false;held=true;return true;},renew:async()=>{},release:async()=>{held=false;},save:async j=>data.set(j._id,structuredClone(j)),
+ claim:async()=>{const j=[...data.values()].find(j=>['queued','validating'].includes(j.status));if(!j)return null;j.status=j.status==='queued'?'running':'planning';return structuredClone(j);},
+ confirm:async(id,owner,time)=>{const j=data.get(id);if(!j||j.owner!==owner||j.status!=='ready'||j.expiresAt<=time)return false;j.status='queued';return true;},cancel:async()=>false};
+ const courses={resolve:async r=>{calls.push('resolve');if(r.orgUnitId==='999')throw Error('bad');return {orgUnitId:r.orgUnitId||'1',code:'001',name:'Course'};},get:async id=>({orgUnitId:id})};
+ const discovery={discover:async org=>({complete:!options.partial,activities:['assignment','quiz','discussionTopic'].map((type,i)=>({type,id:String(i+1),parentId:'7',key:`${type}:${org}:${i+1}`,name:type}))})};
+ const writer={updateActivityDates:async r=>{calls.push(r.dryRun?'preview':'write');if(!r.dryRun&&options.fail)return {status:'failed',error:{category:'API_FAILURE',httpStatus:options.fail}};return {status:r.dryRun?'ready':'updated',verifiedDates:{start:null,due:null,end:null},writeAttempted:!r.dryRun};}};
+ const jobs=createBulkJobs({store,courses,discovery,writers:{assignment:writer,quiz:writer,discussionTopic:writer},writeEnabled:()=>!options.noScope,now:()=>1000});
+ return {jobs,data,calls,store};
+}
+test('all course validation and discovery are read-only; confirmation executes only stored deduplicated plan',async()=>{
+ const s=setup(),j=await s.jobs.create({owner:'a',csv:'OrgUnitId,OrgUnitCode\n1,\n,001\n2,',dates});
+ await s.jobs.tick();const p=await s.jobs.get(j._id,'a');assert.equal(p.status,'ready');assert.equal(p.courses.length,2);assert.equal(p.tasks.length,6);assert.equal(p.rows[1].status,'duplicate');assert.ok(!s.calls.includes('write'));
+ assert.equal(await s.jobs.confirm(j._id,'other'),false);assert.equal(await s.jobs.confirm(j._id,'a'),true);assert.equal(await s.jobs.confirm(j._id,'a'),false);
+ await Promise.all([s.jobs.tick(),s.jobs.tick()]);assert.equal(s.calls.filter(c=>c==='write').length,6);assert.equal((await s.jobs.get(j._id,'a')).status,'completed');
+});
+test('invalid course, incomplete discovery and missing scopes cannot write',async()=>{
+ for(const options of [{csv:'OrgUnitId,OrgUnitCode\n1,\n999,'},{partial:true},{noScope:true}]){
+  const s=setup(options),j=await s.jobs.create({owner:'a',csv:options.csv||'OrgUnitId,OrgUnitCode\n1,',dates});await s.jobs.tick();await s.jobs.confirm(j._id,'a');await s.jobs.tick();
+  assert.ok(!s.calls.includes('write'));assert.equal((await s.jobs.get(j._id,'a')).status,'failed');
+ }
+});
+test('isolated errors continue; systemic errors stop remaining writes and retain results',async()=>{
+ for(const code of [400,401,403,429,503]){
+  const s=setup({fail:code}),j=await s.jobs.create({owner:'a',csv:'OrgUnitId,OrgUnitCode\n1,',dates});await s.jobs.tick();await s.jobs.confirm(j._id,'a');await s.jobs.tick();const r=await s.jobs.get(j._id,'a');
+  assert.equal(r.status,'completedWithErrors');assert.equal(s.calls.filter(c=>c==='write').length,code===400?3:1);if(code!==400)assert.equal(r.totals.skipped,2);
+ }
+});
+test('interruption retains confirmed successes and marks uncertain/unscheduled tasks',()=>{
+ const j=interruptJob({tasks:[{result:{status:'updated'}},{result:{status:'running'}},{}]});
+ assert.deepEqual(j.tasks.map(t=>t.result.status),['updated','failed','skipped']);assert.equal(j.tasks[1].result.error.category,'UNCERTAIN_OUTCOME');
+});
+test('invalid bulk ordering prevents storing jobs',async()=>{
+ const s=setup();await assert.rejects(()=>s.jobs.create({owner:'a',csv:'OrgUnitId,OrgUnitCode\n1,',dates:{...dates,due:dates.start}}));assert.equal(s.data.size,0);
+});
+module.exports={setup};

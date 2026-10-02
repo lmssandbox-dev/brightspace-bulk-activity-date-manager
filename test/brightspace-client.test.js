@@ -42,3 +42,13 @@ test('scope matching rejects read-only, unrelated, malformed and universal-looki
   }
   assert.equal(hasScope('dropbox:*:*','dropbox:folders:*'),false);
 });
+
+test('GET retry budget is bounded, respects Retry-After and never retries permission errors',async()=>{
+ for(const status of [403,429,503]){
+  let calls=0;const waits=[];const get=createBrightspaceGet({baseUrl:'https://tenant.example',oauth:{getAccessToken:async()=>'t'},retries:2,delay:async ms=>waits.push(ms),http:async()=>{calls++;throw {response:{status,headers:{'retry-after':'1'}}};}});
+  await assert.rejects(()=>get('/d2l/api/lp/1.49/courses/1'));
+  assert.equal(calls,status===403?1:3);assert.deepEqual(waits,status===403?[]:[1000,1000]);
+ }
+ let calls=0;const get=createBrightspaceGet({baseUrl:'https://tenant.example',oauth:{getAccessToken:async()=>'t'},retries:2,http:async()=>{calls++;throw {response:{status:429,headers:{'retry-after':'60'}}};}});
+ await assert.rejects(()=>get('/d2l/api/lp/1.49/courses/1'));assert.equal(calls,1);
+});
