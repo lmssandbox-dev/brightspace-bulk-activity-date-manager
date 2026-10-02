@@ -1,5 +1,5 @@
 'use strict';
-const { hasDates } = require('../src/brightspace/activities/normalizers');
+const { hasDates } = require('../src/dates/activities/normalizers');
 function assessDiscovery(result) {
   const activities = result.activities;
   const types = ['assignment', 'quiz', 'discussionTopic'];

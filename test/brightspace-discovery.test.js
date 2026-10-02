@@ -1,11 +1,11 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBrightspaceClient } = require('../src/brightspace/client');
-const { createAssignmentsClient } = require('../src/brightspace/activities/assignments');
-const { createQuizzesClient } = require('../src/brightspace/activities/quizzes');
-const { createDiscussionsClient } = require('../src/brightspace/activities/discussions');
-const { createActivityDiscovery } = require('../src/services/activityDiscovery');
+const { createBrightspaceClient } = require('../src/shared/client');
+const { createAssignmentsClient } = require('../src/dates/activities/assignments');
+const { createQuizzesClient } = require('../src/dates/activities/quizzes');
+const { createDiscussionsClient } = require('../src/dates/activities/discussions');
+const { createActivityDiscovery } = require('../src/dates/activityDiscovery');
 
 // Test composition exercises the same layers wired by the application.
 function createDiscoveryClient(options) {

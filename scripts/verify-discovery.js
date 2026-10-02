@@ -2,14 +2,14 @@
 
 // Read-only live acceptance runner. Uses the same OAuth and API clients as the
 // app; it neither starts ltijs/MongoDB nor prints raw API responses or secrets.
-const { id } = require('../src/brightspace/id');
+const { id } = require('../src/shared/id');
 const { assessDiscovery } = require('./discovery-acceptance');
-const { createBrightspaceAuth } = require('../src/brightspace/auth');
-const { createBrightspaceClient, createBrightspaceGet } = require('../src/brightspace/client');
-const { createAssignmentsClient } = require('../src/brightspace/activities/assignments');
-const { createQuizzesClient } = require('../src/brightspace/activities/quizzes');
-const { createDiscussionsClient } = require('../src/brightspace/activities/discussions');
-const { createActivityDiscovery } = require('../src/services/activityDiscovery');
+const { createBrightspaceAuth } = require('../src/shared/auth');
+const { createBrightspaceClient, createBrightspaceGet } = require('../src/shared/client');
+const { createAssignmentsClient } = require('../src/dates/activities/assignments');
+const { createQuizzesClient } = require('../src/dates/activities/quizzes');
+const { createDiscussionsClient } = require('../src/dates/activities/discussions');
+const { createActivityDiscovery } = require('../src/dates/activityDiscovery');
 
 async function main() {
   if (process.argv.length < 3) throw new Error('usage');

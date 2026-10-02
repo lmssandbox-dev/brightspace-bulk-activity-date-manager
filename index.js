@@ -4,24 +4,24 @@
 require('dotenv').config();
 
 const axios = require('axios');
-const { createBrightspaceAuth } = require('./src/brightspace/auth');
-const { databaseConfig } = require('./src/config/database');
-const { createBrightspaceClient, createBrightspaceGet, createActivityPut, hasScope } = require('./src/brightspace/client');
-const { createAssignmentsClient } = require('./src/brightspace/activities/assignments');
-const { createQuizzesClient } = require('./src/brightspace/activities/quizzes');
-const { createDiscussionsClient } = require('./src/brightspace/activities/discussions');
-const { createActivityDiscovery } = require('./src/services/activityDiscovery');
-const { createDiagnostics } = require('./src/routes/discoveryDiagnostics');
-const { createActivityWriter } = require('./src/brightspace/activityWriters');
-const { createActivityDates } = require('./src/routes/activityDates');
-const { createCoursesClient } = require('./src/brightspace/courses');
-const { createBulkJobs } = require('./src/services/bulkJobs');
-const { createBulkStore } = require('./src/services/bulkStore');
-const { createBulkDates } = require('./src/routes/bulkDates');
+const { createBrightspaceAuth } = require('./src/shared/auth');
+const { databaseConfig } = require('./src/shared/database');
+const { createBrightspaceClient, createBrightspaceGet, createActivityPut, hasScope } = require('./src/shared/client');
+const { createAssignmentsClient } = require('./src/dates/activities/assignments');
+const { createQuizzesClient } = require('./src/dates/activities/quizzes');
+const { createDiscussionsClient } = require('./src/dates/activities/discussions');
+const { createActivityDiscovery } = require('./src/dates/activityDiscovery');
+const { createDiagnostics } = require('./src/dates/discoveryDiagnostics');
+const { createActivityWriter } = require('./src/dates/activityWriters');
+const { createActivityDates } = require('./src/dates/activityDates');
+const { createCoursesClient } = require('./src/shared/courses');
+const { createBulkJobs } = require('./src/shared/jobs');
+const { createBulkStore } = require('./src/shared/store');
+const { createBulkDates } = require('./src/shared/routes');
 const { createHash } = require('node:crypto');
-const { createSourceDeploymentClient } = require('./src/brightspace/sourceDeployment');
-const { createDeploymentJobs } = require('./src/services/deploymentJobs');
-const { createDeploymentView } = require('./src/routes/sourceDeployment');
+const { createSourceDeploymentClient } = require('./src/replication/client');
+const { createDeploymentJobs } = require('./src/replication/jobs');
+const { createDeploymentView } = require('./src/replication/view');
 const lti = require('ltijs').Provider;
 
 // ===============================
@@ -156,7 +156,7 @@ const bulkJobs = createBulkJobs({store:bulkStore,discovery,writers,writeEnabled,
 const bulkDates = createBulkDates({jobs:bulkJobs,deploymentId:BS_DEPLOYMENT_ID,secret:LTI_KEY,writeEnabled});
 const deploymentRoutes = createBulkDates({jobs:bulkJobs,deploymentId:BS_DEPLOYMENT_ID,secret:LTI_KEY,kind:'sourceDeployment',view:createDeploymentView({enabled:deployEnabled})});
 const diagnostics = createDiagnostics({
-  activityForm: res => bulkDates.form(res) + deploymentRoutes.form(res) + activityDates.form(res),
+  activityForm: res => '<nav aria-label="Application sections"><a href="#date-management">1. Activity dates</a> | <a href="#source-replication">2. Source replication</a></nav>' + bulkDates.form(res) + deploymentRoutes.form(res) + activityDates.form(res),
   client: discovery,
   deploymentId: BS_DEPLOYMENT_ID
 });

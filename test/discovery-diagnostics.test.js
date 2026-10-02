@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createDiagnostics } = require('../src/routes/discoveryDiagnostics');
+const { createDiagnostics } = require('../src/dates/discoveryDiagnostics');
 function response(token = { user: 'developer', deploymentId: 'deployment' }) {
   return { locals: { token, ltik: 'session-token' }, headers: {}, code: 200,
     set(key, value) { this.headers[key] = value; return this; },

@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { databaseConfig } = require('../src/config/database');
+const { databaseConfig } = require('../src/shared/database');
 
 test('accepts only the dedicated database and preserves connection options', () => {
   const uri = 'mongodb+srv://user:password@cluster.example/brightspace_activity_date_manager?retryWrites=true&w=majority&authSource=admin';

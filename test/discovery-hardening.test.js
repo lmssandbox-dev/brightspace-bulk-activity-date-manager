@@ -1,9 +1,9 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const n = require('../src/brightspace/activities/normalizers');
-const { hasDates } = require('../src/brightspace/activities/normalizers');
-const { describeAvailabilityType } = require('../src/brightspace/activities/normalizers');
+const n = require('../src/dates/activities/normalizers');
+const { hasDates } = require('../src/dates/activities/normalizers');
+const { describeAvailabilityType } = require('../src/dates/activities/normalizers');
 const normalizers = { assignment: n.normalizeAssignment, quiz: n.normalizeQuiz,
   discussionTopic: n.normalizeDiscussionTopic };
 for (const f of require('./fixtures/date-cases.json')) {

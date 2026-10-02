@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const {createBulkStore}=require('../src/services/bulkStore');
+const {createBulkStore}=require('../src/shared/store');
 function setup({lost=false,duplicate=false,recover=[]}={}){
  const calls=[];
  const collection=name=>({
@@ -33,4 +33,13 @@ test('Mongo save is fenced by worker and running state; no ltijs collections are
  const s=setup();await s.store.save({_id:'j',status:'ready',tasks:[]},'w');
  const saved=s.calls.find(c=>c.name==='bulk_date_jobs');assert.deepEqual(saved.filter,{_id:'j',namespace:'n',worker:'w',status:{$in:['planning','running']}});
  assert.ok(s.calls.every(c=>['bulk_date_jobs','bulk_date_locks'].includes(c.name)));
+});
+
+test('activation queues atomically for the owner and removes preview expiry',async()=>{
+ const s=setup();await s.store.activate('j','owner',100);
+ const c=s.calls[0];assert.equal(c.filter.owner,'owner');assert.equal(c.filter.kind,'sourceDeployment');assert.ok(!c.filter.status.$in.includes('queued'));assert.ok(!c.filter.status.$in.includes('activated'));
+ assert.deepEqual(c.filter['tasks.targets.deactivation'],{$exists:true});assert.equal(c.update.$set.operation,'activate');assert.equal(c.update.$set.status,'queued');assert.deepEqual(c.update.$unset,{expiresAt:''});
+});
+test('activation jobs cannot be cancelled and leave inactive replicas untracked',async()=>{
+ const s=setup();await s.store.cancel('j','owner');assert.deepEqual(s.calls[0].filter.operation,{$ne:'activate'});
 });

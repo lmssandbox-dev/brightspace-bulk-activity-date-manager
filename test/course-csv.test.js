@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const {parseCourseCsv}=require('../src/services/courseCsv');
-const {createCoursesClient}=require('../src/brightspace/courses');
+const {parseCourseCsv}=require('../src/dates/courseCsv');
+const {createCoursesClient}=require('../src/shared/courses');
 test('CSV preserves numeric codes, BOM, leading zeroes, quoted values and row diagnostics',()=>{
  const rows=parseCourseCsv('\uFEFFOrgUnitCode,OrgUnitId\r\n"00123",\r\n,9524\r\n,9524\r\n,\r\ncode,12\r\n,-1\r\nextra,,column\r\n');
  assert.equal(rows[0].orgUnitCode,'00123');assert.equal(rows[0].orgUnitId,'');

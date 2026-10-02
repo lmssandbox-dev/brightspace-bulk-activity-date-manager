@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test'), assert=require('node:assert/strict');
-const {createActivityDates,brazilDate}=require('../src/routes/activityDates');
+const {createActivityDates,brazilDate}=require('../src/dates/activityDates');
 function response(ltik='session',token={deploymentId:'d',user:'u'}) {return {locals:{ltik,token},code:200,headers:{},set(k,v){this.headers[k]=v;return this;},status(c){this.code=c;return this;},send(body){this.body=body;return this;}};}
 const ticket=html=>html.match(/name="ticket" value="([a-f0-9]+)"/)[1];
 function setup(options={}) {
@@ -49,9 +49,9 @@ test('unexpected writer failure is sanitized and authorization headers are set',
 });
 test('discovery launch includes the Assignment form without executing writer',()=>{
  const s=setup(),res=response();
- const {createDiagnostics}=require('../src/routes/discoveryDiagnostics');
+ const {createDiagnostics}=require('../src/dates/discoveryDiagnostics');
  const d=createDiagnostics({client:{},deploymentId:'d',activityForm:s.routes.form});d.launch(res.locals.token,{},res);
- assert.match(res.body,/Activity date test/);assert.match(res.body,/Preview selected dates/);assert.equal(s.calls.length,0);
+ assert.match(res.body,/Single activity date update/);assert.match(res.body,/Preview selected dates/);assert.equal(s.calls.length,0);
 });
 
 test('form routes each activity type and enforces its own scope and preview identity',async()=>{

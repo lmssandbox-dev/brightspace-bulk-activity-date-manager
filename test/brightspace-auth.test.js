@@ -1,7 +1,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const { generateKeyPairSync, createPublicKey, verify } = require('node:crypto');
-const { createBrightspaceAuth } = require('../src/brightspace/auth');
+const { createBrightspaceAuth } = require('../src/shared/auth');
 const { privateKey } = generateKeyPairSync('rsa', { modulusLength: 2048 });
 const config = { clientId: 'test-client', scope: 'test:resource:read', kid: 'test-key',
   privateKeyPem: privateKey.export({ format: 'pem', type: 'pkcs8' }) };

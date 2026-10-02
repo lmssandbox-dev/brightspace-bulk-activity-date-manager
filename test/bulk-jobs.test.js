@@ -1,6 +1,6 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const {createBulkJobs,interruptJob}=require('../src/services/bulkJobs');
+const {createBulkJobs,interruptJob}=require('../src/shared/jobs');
 const dates={start:'2027-01-01T00:00:00Z',due:'2027-01-02T00:00:00Z',end:'2027-01-03T00:00:00Z'};
 function setup(options={}) {
  const data=new Map(),calls=[];let held=false;
@@ -40,3 +40,11 @@ test('invalid bulk ordering prevents storing jobs',async()=>{
  const s=setup();await assert.rejects(()=>s.jobs.create({owner:'a',csv:'OrgUnitId,OrgUnitCode\n1,',dates:{...dates,due:dates.start}}));assert.equal(s.data.size,0);
 });
 module.exports={setup};
+
+test('queued activation dispatches separately and retains the original deployment result',async()=>{
+ const s=setup();let deployments=0,activations=0;
+ const job={_id:'activation',owner:'a',kind:'sourceDeployment',operation:'activate',status:'queued',courses:[],tasks:[{sourceId:'10',targets:[{orgUnitId:'20'}],result:{status:'submitted',deploymentId:'99'}}]};
+ s.data.set(job._id,job);
+ const jobs=createBulkJobs({store:s.store,deployment:{execute:async()=>{deployments++;},activate:async j=>{activations++;j.status='activated';}}});
+ await jobs.tick();assert.equal(deployments,0);assert.equal(activations,1);assert.equal(s.data.get(job._id).status,'activated');assert.equal(s.data.get(job._id).tasks[0].result.deploymentId,'99');
+});

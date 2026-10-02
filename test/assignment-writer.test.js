@@ -1,8 +1,8 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createActivityWriter, buildAssignmentPayload, validateDates } = require('../src/brightspace/activityWriters');
-const { createAssignmentPut } = require('../src/brightspace/client');
+const { createActivityWriter, buildAssignmentPayload, validateDates } = require('../src/dates/activityWriters');
+const { createAssignmentPut } = require('../src/shared/client');
 const fixture = require('./fixtures/assignment-write.json');
 const dates = { start:'2027-01-01T00:00:00.000Z', due:'2027-01-02T00:00:00.000Z', end:'2027-01-03T00:00:00.000Z' };
 const request = { orgUnitId:'999', activity:{ type:'assignment', id:'11', key:'assignment:999:11', orgUnitId:'999' }, dates };
@@ -129,7 +129,7 @@ test('missing required field names are reported without native data', async () =
 });
 
 test('HTTP 400 preserves selected validation messages but removes payload secrets', async () => {
-  const {createActivityPut}=require('../src/brightspace/client');
+  const {createActivityPut}=require('../src/shared/client');
   const put=createActivityPut({type:'assignment',leRoot:'https://tenant.example/d2l/api/le/1.98',
     oauth:{getAccessToken:async()=> 'private-access-token'},http:async()=>{throw Object.assign(new Error('RAW SECRET'),{
       config:{headers:{Authorization:'Bearer private-access-token'}},response:{status:400,data:{

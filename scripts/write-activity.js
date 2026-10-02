@@ -1,9 +1,9 @@
 'use strict';
 // Single-activity operator tool; preview by default, explicit --apply to write.
-const { id } = require('../src/brightspace/id');
-const { createBrightspaceAuth } = require('../src/brightspace/auth');
-const { createBrightspaceClient, createBrightspaceGet, createActivityPut, hasScope } = require('../src/brightspace/client');
-const { createActivityWriter, validateDates } = require('../src/brightspace/activityWriters');
+const { id } = require('../src/shared/id');
+const { createBrightspaceAuth } = require('../src/shared/auth');
+const { createBrightspaceClient, createBrightspaceGet, createActivityPut, hasScope } = require('../src/shared/client');
+const { createActivityWriter, validateDates } = require('../src/dates/activityWriters');
 const scopes = { assignment: 'dropbox:folders:write', quiz: 'quizzing:quizzes:write', discussionTopic: 'discussions:topics:manage' };
 function parseArgs(args) {
   args = [...args];

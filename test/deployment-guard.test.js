@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { deploymentGuard } = require('../src/brightspace/deploymentGuard');
+const { deploymentGuard } = require('../src/shared/deploymentGuard');
 
 function launch(expected, token, req = {}) {
   const result = { apiCalls: 0 };

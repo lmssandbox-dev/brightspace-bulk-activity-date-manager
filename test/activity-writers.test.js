@@ -1,7 +1,7 @@
 'use strict';
 const test=require('node:test'),assert=require('node:assert/strict');
-const {createActivityWriter,buildQuizPayload,buildDiscussionTopicPayload}=require('../src/brightspace/activityWriters');
-const {createActivityPut}=require('../src/brightspace/client');
+const {createActivityWriter,buildQuizPayload,buildDiscussionTopicPayload}=require('../src/dates/activityWriters');
+const {createActivityPut}=require('../src/shared/client');
 const dates={start:'2027-01-01T00:00:00.000Z',due:'2027-01-02T00:00:00.000Z',end:'2027-01-03T00:00:00.000Z'};
 const fixture=type=>structuredClone(require(`./fixtures/${type}-write.json`));
 function setup(type,options={}){

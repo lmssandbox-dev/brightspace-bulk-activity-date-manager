@@ -1,7 +1,7 @@
 'use strict';
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { createBrightspaceGet } = require('../src/brightspace/client');
+const { createBrightspaceGet } = require('../src/shared/client');
 
 test('authenticated transport retains GET, bearer token, timeout and redirect safeguards', async () => {
   const calls = [];
@@ -27,7 +27,7 @@ test('authenticated transport rejects foreign origins and HTTP before accessing 
   assert.equal(calls, 0);
 });
 
-const { hasScope } = require('../src/brightspace/client');
+const { hasScope } = require('../src/shared/client');
 test('scope matching accepts explicit, wildcard and action-list permissions', () => {
   for (const scope of ['dropbox:folders:write','dropbox:folders:*','dropbox:*:*','dropbox:*:write',
     'dropbox:folders:read,write','quizzing:*:*  dropbox:*:*\ncontent:*:*','  dropbox:folders:write  ']) {
