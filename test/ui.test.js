@@ -32,3 +32,22 @@ test('date review retains course-level blocking errors and does not offer Apply 
  const html=createDateView({writeEnabled:()=>true}).render({},job,helpers);
  assert.match(html,/Discovery incomplete/);assert.match(html,/<details class="panel" open><summary>Course validation/);assert.doesNotMatch(html,/action="\/apply"/);
 });
+
+// ltijs registers its launch route during setup, before later app middleware.
+test('page shell wraps an LTI launch registered after serverAddon',()=>{
+ const {installPageShell}=require('../src/ui/install');
+ const stack=[];
+ installPageShell({use:fn=>stack.push(fn)});
+ stack.push((req,res)=>res.send(workspace({dates:'Date form',replication:'Deploy form',history:'History'})));
+ let output;const headers={};
+ const res={locals:{ltik:'session'},getHeader:key=>headers[key],set:(key,value)=>headers[key]=value,send:body=>{output=body;}};
+ stack[0]({path:'/'},res,()=>stack[1]({path:'/'},res));
+ assert.match(output,/<!doctype html>/);assert.match(output,/href="\/assets\/app.css"/);assert.match(output,/src="\/assets\/app.js"/);assert.match(output,/Brightspace Source Courses Tools/);
+ assert.equal((output.match(/<!doctype html>/g)||[]).length,1);
+});
+test('entry point installs page shell in serverAddon before launch routes',()=>{
+ const fs=require('node:fs'),path=require('node:path');
+ const source=fs.readFileSync(path.join(__dirname,'../index.js'),'utf8');
+ assert.match(source,/serverAddon: app => \{\s*installDateUploadLimit\(app\);\s*installPageShell\(app\);/);
+ assert.match(source,/installUi\(lti,\{shell:false\}\)/);
+});

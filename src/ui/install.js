@@ -1,13 +1,16 @@
 'use strict';
 const path=require('node:path');
 const {page,escape}=require('./page');
-function installUi(lti){
+function installUi(lti,{shell=true}={}){
  for(const name of ['app.js','app.css']){
   const route=`/assets/${name}`;
   lti.whitelist({route,method:'get'});
   lti.app.get(route,(req,res)=>{res.set('Cache-Control','public, max-age=0, must-revalidate');res.sendFile(path.join(__dirname,'../../public/assets',name));});
  }
- lti.app.use((req,res,next)=>{
+ if(shell)installPageShell(lti.app);
+}
+function installPageShell(app){
+ app.use((req,res,next)=>{
   const send=res.send.bind(res);
   res.send=body=>{
    const type=String(res.getHeader('Content-Type')||'');
@@ -21,4 +24,4 @@ function installUi(lti){
   next();
  });
 }
-module.exports={installUi};
+module.exports={installUi,installPageShell};

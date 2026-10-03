@@ -23,7 +23,7 @@ const { createSourceDeploymentClient } = require('./src/replication/client');
 const { createDeploymentJobs } = require('./src/replication/jobs');
 const { createDeploymentView } = require('./src/replication/view');
 const lti = require('ltijs').Provider;
-const {installUi}=require('./src/ui/install');
+const {installUi,installPageShell}=require('./src/ui/install');
 const {workspace}=require('./src/ui/page');
 const {diagnosticForm}=require('./src/dates/discoveryDiagnostics');
 
@@ -106,7 +106,10 @@ lti.setup(
   LTI_KEY,
   databaseConfig(MONGODB_URL),
   {
-    serverAddon: installDateUploadLimit,
+    serverAddon: app => {
+      installDateUploadLimit(app);
+      installPageShell(app);
+    },
     appRoute: '/',       // Target Link URI
     loginRoute: '/login',
     cookies: {
@@ -117,7 +120,7 @@ lti.setup(
   }
 );
 
-installUi(lti);
+installUi(lti,{shell:false});
 
 // Public discovery endpoints must be reachable without an LTI launch.
 lti.whitelist({ route: '/.well-known/brightspace-jwks.json', method: 'get' }, { route: '/ping', method: 'get' });
