@@ -1,6 +1,6 @@
 'use strict';
 
-const DATABASE_NAME = 'brightspace_source_courses_tool';
+const DATABASE_NAME = 'brightspace_source_courses_tools';
 
 function databaseConfig(uri) {
   // Inspect only the database path; never include credentials in an error.

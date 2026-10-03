@@ -23,4 +23,4 @@ No second service, database or LTI installation is required. Copy completion rem
 
 The large-upload and time-zone improvements have automated local coverage; live deployment validation remains pending.
 
-- Before deployment, set Render MONGODB_URL to the fresh `brightspace_source_courses_tool` database and verify a new LTI launch. The old database is retained without migration.
+- Before deployment, set Render MONGODB_URL to the fresh `brightspace_source_courses_tools` database and verify a new LTI launch. The old database is retained without migration.

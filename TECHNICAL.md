@@ -24,7 +24,7 @@ A deployment ID confirms initiation, not copy completion. Unexpected or lost res
 - store.js: existing bulk_date_jobs, bulk_date_chunks and bulk_date_locks collections, ownership, confirmations and leases.
 - routes.js: shared signed workflow actions, date bulk forms and delegation to the replication view.
 
-One worker lease coordinates both workflows. Source/replica reservations protect unresolved deployment batches against overlapping bulk writes. The namespace and endpoints remain unchanged. The database is now configured as `brightspace_source_courses_tool`, starting empty without migrating old records.
+One worker lease coordinates both workflows. Source/replica reservations protect unresolved deployment batches against overlapping bulk writes. The namespace and endpoints remain unchanged. The database is now configured as `brightspace_source_courses_tools`, starting empty without migrating old records.
 
 Forms bind action, workflow, job, expiry and LTI session. Ownership is checked before access. Atomic confirmations prevent duplicate queueing. Saves are fenced by worker and running state. Interrupted work is retained for inspection. Activation retries preserve deployment results and reconcile current active states without redeploying. The activation action removes preview expiry and records manual completion confirmation.
 
