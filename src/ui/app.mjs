@@ -4,7 +4,7 @@ import '@brightspace-ui/core/components/loading-spinner/loading-spinner.js';
 import './app.css';
 
 // Enhance real HTML buttons: native validation, submitter name/value and signed POSTs remain intact.
-for (const native of document.querySelectorAll('button')) {
+for (const native of document.querySelectorAll('button:not([data-sidebar-native])')) {
  const button=document.createElement('d2l-button');
  button.textContent=native.textContent;button.primary=native.classList.contains('primary');button.disabled=native.disabled;
  button.addEventListener('click',()=>native.click());

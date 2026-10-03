@@ -4,3 +4,10 @@
 /* Workspace sidebar */
 main{max-width:1440px;padding:24px 32px 52px}.app-header{padding:18px 32px}.sidebar-layout{display:grid;grid-template-columns:218px minmax(0,1fr);gap:36px;align-items:start}.sidebar{position:sticky;top:24px;min-height:580px;border-right:1px solid #e0e5e9;padding:24px 22px 24px 0}.sidebar>.eyebrow{font-size:11px;margin:0 12px 18px;color:#7a858f}.sidebar nav{display:flex;flex-direction:column;gap:7px}.sidebar nav a{display:flex;align-items:center;gap:12px;padding:12px;border-radius:7px;font-size:14px;font-weight:600;text-decoration:none;color:#59636e}.sidebar nav a span{font-size:20px;line-height:1}.sidebar nav a:hover{background:#edf0f3;color:#20252a}.sidebar nav a[aria-current]{background:#e7eef5;color:#005b9e}.sidebar-note{margin:40px 12px 0;padding-top:20px;border-top:1px solid #e0e5e9;font-size:12px;color:#7a858f}.sidebar-note small{font-size:11px;margin-top:4px}.workspace-content{min-width:0}.workspace-content>section[hidden]{display:none}.workspace-content .steps{margin-top:16px}@media(max-width:850px){.sidebar-layout{grid-template-columns:170px minmax(0,1fr);gap:20px}.sidebar{padding-right:12px}.form-grid{grid-template-columns:1fr}}@media(max-width:560px){main{padding:20px 16px}.sidebar-layout{grid-template-columns:1fr;gap:12px}.sidebar{position:static;min-height:0;border-right:0;border-bottom:1px solid #e0e5e9;padding:0 0 16px}.sidebar nav{gap:4px}.sidebar-note{display:none}}
 
+
+/* Keep workflow navigation available after a signed form submission. */
+.sidebar nav form{margin:0}
+.sidebar nav button[data-sidebar-native]{display:flex;align-items:center;gap:12px;width:100%;padding:12px;border:0;border-radius:7px;background:transparent;text-align:left;font-size:14px;font-weight:600;color:#59636e;line-height:1.55}
+.sidebar nav button[data-sidebar-native] span{font-size:20px;line-height:1}
+.sidebar nav button[data-sidebar-native]:hover{background:#edf0f3;color:#20252a}
+.sidebar nav button[data-sidebar-native][aria-current]{background:#e7eef5;color:#005b9e}

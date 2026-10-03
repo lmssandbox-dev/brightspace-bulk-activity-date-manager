@@ -51,3 +51,13 @@ test('entry point installs page shell in serverAddon before launch routes',()=>{
  assert.match(source,/serverAddon: app => \{\s*installDateUploadLimit\(app\);\s*installPageShell\(app\);/);
  assert.match(source,/installUi\(lti,\{shell:false\}\)/);
 });
+
+test('review and results retain sidebar POST navigation without exposing session in URLs',()=>{
+ const html=page('<h1>Review your date updates</h1>',{ltik:'session-secret',section:'dates'});
+ assert.equal((html.match(/data-sidebar-native/g)||[]).length,3);
+ for(const section of ['dates','replication','history'])assert.ok(html.includes(`name="section" value="${section}"`));
+ assert.match(html,/data-sidebar-native aria-current="page"/);
+ assert.doesNotMatch(html,/href="[^"]*session-secret/);
+ const home=page(workspace({dates:'Dates',replication:'Deploy',history:'History'}),{ltik:'session-secret'});
+ assert.equal((home.match(/class="sidebar-layout"/g)||[]).length,1);
+});
