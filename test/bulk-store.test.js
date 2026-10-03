@@ -43,3 +43,9 @@ test('activation queues atomically for the owner and removes preview expiry',asy
 test('activation jobs cannot be cancelled and leave inactive replicas untracked',async()=>{
  const s=setup();await s.store.cancel('j','owner');assert.deepEqual(s.calls[0].filter.operation,{$ne:'activate'});
 });
+
+test('chunked date recovery requeues checkpoints without rewriting tasks',async()=>{
+ const s=setup({recover:[{_id:'p',kind:'dates',storageVersion:2,status:'planning'},{_id:'r',kind:'dates',storageVersion:2,status:'running'}]});
+ await s.store.acquire('w');const changes=s.calls.filter(c=>c.name==='bulk_date_jobs'&&c.op==='updateOne');
+ assert.deepEqual(changes.map(c=>c.update.$set.status),['validating','queued']);assert.ok(changes.every(c=>!Object.hasOwn(c.update.$set,'tasks')));
+});

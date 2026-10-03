@@ -8,7 +8,7 @@ Upload or paste a UTF-8 CSV with headers `OrgUnitId,OrgUnitCode`. Supply exactly
 
 Enter Start, Due and End in Brasília time. Start must be before Due; Due must be on or before End. Validate and preview resolves every course and discovers Assignments, Quizzes and Discussion Topics, including undated activities, without changes. Apply writes the saved plan, reads dates back and records per-activity results. Return through My recent jobs or download the CSV report.
 
-Limits: 100 CSV rows, 16 KB, 1,000 activities. Duplicates are processed once. Invalid rows or incomplete discovery block the plan. Previews expire after 30 minutes. Changed dates are rejected unless already equal to the requested dates. Availability modes and unrelated activity settings are preserved.
+Limits: 10,000 CSV data rows, 5 MB of UTF-8 CSV, 250,000 activities per date job. Duplicates are processed once. Invalid rows or incomplete discovery block the plan. Previews must be confirmed within 30 minutes; confirmed jobs can finish or resume after that window. Changed dates are rejected unless already equal to the requested dates. Availability modes and unrelated activity settings are preserved.
 
 Read-only discovery and the single-activity preview/apply form remain available for troubleshooting. All three activity writers and the CSV date workflow have been validated live by the user.
 
@@ -34,6 +34,7 @@ src/
     activities/          Assignments, Quizzes, Discussions and normalizers
   replication/           Source validation, deployment, activation and its view
   shared/                LTI/OAuth helpers, API transport, database and job infrastructure
+  ui/                    D2L components, responsive styles and shared page layout
 scripts/                 Local discovery and single-activity CLI tools
 test/                    Automated tests and JSON fixtures
 ```
@@ -55,3 +56,17 @@ D2L_LE_VERSION must be supported (at least 1.90). Source replication needs D2L_L
 `npm run activity:dates -- <assignment|quiz|discussionTopic> <courseId> <activityId> <startISO> <dueISO> <endISO> [forumId] [--apply]`
 
 Preview is the default; Discussion Topics require the forum ID. The CLI uses the same writers and OAuth configuration, without an LTI launch or MongoDB. `npm run verify:discovery` runs the discovery verification script. These are development tools; use the saved-job UI for bulk work.
+
+## D2L interface
+
+The workspace uses `@brightspace-ui/core` components for Activity dates, Source replication and Job history tabs, buttons, alerts and loading indicators. Native date inputs retain explicit Brasília time semantics. CSV templates, grouped replica results and collapsible diagnostics are included. Deployment submission never implies copy completion.
+
+`npm ci` builds frontend assets automatically through postinstall. `npm start` also builds them before starting the server. For manual builds use `npm run build`. Render may continue using the existing service; no separate frontend hosting or database is needed. Commit package.json, package-lock.json, src/ui, the updated source and scripts/build-ui.js. Generated public/assets files are ignored by Git and rebuilt during deployment. Browser assets are served locally; no CDN is required.
+
+The frontend was checked locally with synthetic jobs and no Brightspace writes. Verify it through a real LTI launch after deployment, including the LMS frame size and platform browser restrictions.
+
+### Large date jobs
+
+Date-job records use immutable chunks in `bulk_date_chunks`, publishing checkpoint references only after chunks are stored. Planning checkpoints every 50 work items; execution saves before and after each activity. A restarted worker resumes resolution/discovery and skips saved results. An in-flight write is flagged as uncertain, never automatically repeated. Systemic API failures still stop writes. Replication retains its 100-row / 16 KB limits and existing recovery rules.
+
+Result tables show 100 records per page; the CSV report includes all records. Processing remains sequential to bound API traffic. The complete job is loaded into worker memory, so size the server for the activity ceiling; chunking removes the single MongoDB document limit but is not a streaming worker. Historical immutable chunks are retained and need a retention policy before sustained high-volume production use. Large jobs have been tested locally with synthetic data, not at 10,000-course scale against a live Brightspace tenant.

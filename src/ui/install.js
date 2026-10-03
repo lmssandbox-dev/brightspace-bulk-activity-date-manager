@@ -1,0 +1,24 @@
+'use strict';
+const path=require('node:path');
+const {page,escape}=require('./page');
+function installUi(lti){
+ for(const name of ['app.js','app.css']){
+  const route=`/assets/${name}`;
+  lti.whitelist({route,method:'get'});
+  lti.app.get(route,(req,res)=>{res.set('Cache-Control','public, max-age=0, must-revalidate');res.sendFile(path.join(__dirname,'../../public/assets',name));});
+ }
+ lti.app.use((req,res,next)=>{
+  const send=res.send.bind(res);
+  res.send=body=>{
+   const type=String(res.getHeader('Content-Type')||'');
+   if(typeof body==='string'&&(!type||type.includes('text/html'))&&req.path!=='/ping'&&!req.path.startsWith('/assets/')){
+    res.set('Cache-Control','no-store');res.set('Referrer-Policy','no-referrer');
+    const section=req.path.startsWith('/deploy')?'replication':'dates';
+    body=page(body.trimStart().startsWith('<')?body:`<section class="panel"><h1>Unable to continue</h1><p>${escape(body)}</p><p>Return to Workspace or relaunch from Brightspace to continue.</p></section>`,{ltik:res.locals.ltik,section});
+   }
+   return send(body);
+  };
+  next();
+ });
+}
+module.exports={installUi};

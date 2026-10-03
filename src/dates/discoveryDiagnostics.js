@@ -18,7 +18,7 @@ function diagnosticForm(ltik, orgUnitId = '') {
     </form>`;
 }
 
-function createDiagnostics({ client, deploymentId, activityForm = () => '' }) {
+function createDiagnostics({ client, deploymentId, activityForm = () => '', workspace = false }) {
   const authorizeDeployment = deploymentGuard(deploymentId);
   function authorize(token, req, res) {
     res.set('Cache-Control', 'no-store');
@@ -31,7 +31,7 @@ function createDiagnostics({ client, deploymentId, activityForm = () => '' }) {
     launch(token, req, res) {
       if (!authorize(token, req, res)) return;
       // Do not assume the LTI context ID is a Brightspace OrgUnitId.
-      res.send(diagnosticForm(res.locals.ltik) + activityForm(res));
+      res.send((workspace?'':diagnosticForm(res.locals.ltik)) + activityForm(res));
     },
     async activities(req, res) {
       if (!authorize(res.locals.token, req, res)) return;

@@ -2,9 +2,9 @@
 const { parse } = require('csv-parse/sync');
 const { id } = require('../shared/id');
 const invalid = message => Object.assign(new Error(message), {code:'INVALID_CSV'});
-const MAX_ROWS = 100, MAX_BYTES = 16384;
+const MAX_ROWS = 10000, MAX_BYTES = 5 * 1024 * 1024;
 function parseCourseCsv(text) {
-  if (typeof text !== 'string' || Buffer.byteLength(text) > MAX_BYTES) throw invalid('CSV must be UTF-8 text, at most 16 KB.');
+  if (typeof text !== 'string' || Buffer.byteLength(text) > MAX_BYTES) throw invalid('CSV must be UTF-8 text, at most 5 MB.');
   let records;
   try { records = parse(text, { bom:true, trim:true, relax_column_count:true, skip_empty_lines:false, info:true, max_record_size:MAX_BYTES }); }
   catch { throw invalid('Malformed CSV. Check quotes and comma-separated columns.'); }
@@ -12,7 +12,7 @@ function parseCourseCsv(text) {
   if (!header || header.length !== 2 || new Set(header).size !== 2 || !header.includes('OrgUnitId') || !header.includes('OrgUnitCode')) {
     throw invalid('CSV headers must be OrgUnitId,OrgUnitCode.');
   }
-  if (records.length > MAX_ROWS) throw invalid('CSV supports at most 100 data rows.');
+  if (records.length > MAX_ROWS) throw invalid('CSV supports at most 10,000 data rows.');
   const seen = new Map();
   const rows = records.map(({record,info}) => {
     const row = { row:info.lines, orgUnitId:'', orgUnitCode:'', status:'pending' };

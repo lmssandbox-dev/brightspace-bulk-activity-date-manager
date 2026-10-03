@@ -1,0 +1,36 @@
+import '@brightspace-ui/core/components/button/button.js';
+import '@brightspace-ui/core/components/tabs/tabs.js';
+import '@brightspace-ui/core/components/tabs/tab.js';
+import '@brightspace-ui/core/components/tabs/tab-panel.js';
+import '@brightspace-ui/core/components/alert/alert.js';
+import '@brightspace-ui/core/components/loading-spinner/loading-spinner.js';
+import './app.css';
+
+// Enhance real HTML buttons: native validation, submitter name/value and signed POSTs remain intact.
+for (const native of document.querySelectorAll('button')) {
+ const button=document.createElement('d2l-button');
+ button.textContent=native.textContent;button.primary=native.classList.contains('primary');button.disabled=native.disabled;
+ button.addEventListener('click',()=>native.click());
+ native.after(button);native.hidden=true;
+}
+for(const input of document.querySelectorAll('[data-csv-target]')){
+ const textarea=document.getElementById(input.dataset.csvTarget),message=document.getElementById(input.id.replace('-file','-message'));
+ input.addEventListener('change',async()=>{
+  const file=input.files[0];textarea.value='';input.setCustomValidity('');if(!file)return;
+  input.setCustomValidity('Please wait for the CSV to finish loading.');
+  textarea.value='';
+  if(file.size>Number(input.dataset.maxBytes||16384)){message.textContent=`This file exceeds ${Number(input.dataset.maxBytes)>16384?'5 MB':'16 KB'}. Choose a smaller CSV.`;input.value='';return;}
+  try{const text=new TextDecoder('utf-8',{fatal:true}).decode(await file.arrayBuffer());if(input.files[0]!==file)return;textarea.value=text;input.setCustomValidity('');message.textContent=`${file.name} loaded.`;}
+  catch{message.textContent='Could not read this file. Save it as UTF-8 CSV and try again.';input.value='';}
+ });
+ // Reveal the editor before native validation tries to focus an empty required textarea.
+ textarea.addEventListener('invalid',()=>{const details=textarea.closest('details');if(details)details.open=true;});
+}
+for(const form of document.querySelectorAll('form')){
+ form.addEventListener('submit',()=>{
+  // Don't disable native submitters: their name/value must reach the server.
+  for(const button of form.querySelectorAll('d2l-button'))button.disabled=true;
+ });
+}
+// Browsers may restore a submitted page through their back/forward cache.
+window.addEventListener('pageshow',()=>{for(const button of document.querySelectorAll('d2l-button'))button.disabled=false;});

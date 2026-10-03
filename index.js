@@ -23,6 +23,9 @@ const { createSourceDeploymentClient } = require('./src/replication/client');
 const { createDeploymentJobs } = require('./src/replication/jobs');
 const { createDeploymentView } = require('./src/replication/view');
 const lti = require('ltijs').Provider;
+const {installUi}=require('./src/ui/install');
+const {workspace}=require('./src/ui/page');
+const {diagnosticForm}=require('./src/dates/discoveryDiagnostics');
 
 // ===============================
 // Variáveis de ambiente
@@ -98,10 +101,12 @@ const d2lGet = createBrightspaceGet({ http: axios, oauth, baseUrl: BS_URL, retri
 // ===============================
 // Setup ltijs (LTI 1.3 Provider)
 // ===============================
+const {installDateUploadLimit}=require('./src/shared/uploadLimit');
 lti.setup(
   LTI_KEY,
   databaseConfig(MONGODB_URL),
   {
+    serverAddon: installDateUploadLimit,
     appRoute: '/',       // Target Link URI
     loginRoute: '/login',
     cookies: {
@@ -111,6 +116,8 @@ lti.setup(
     devMode: false
   }
 );
+
+installUi(lti);
 
 // Public discovery endpoints must be reachable without an LTI launch.
 lti.whitelist({ route: '/.well-known/brightspace-jwks.json', method: 'get' }, { route: '/ping', method: 'get' });
@@ -156,11 +163,18 @@ const bulkJobs = createBulkJobs({store:bulkStore,discovery,writers,writeEnabled,
 const bulkDates = createBulkDates({jobs:bulkJobs,deploymentId:BS_DEPLOYMENT_ID,secret:LTI_KEY,writeEnabled});
 const deploymentRoutes = createBulkDates({jobs:bulkJobs,deploymentId:BS_DEPLOYMENT_ID,secret:LTI_KEY,kind:'sourceDeployment',view:createDeploymentView({enabled:deployEnabled})});
 const diagnostics = createDiagnostics({
-  activityForm: res => '<nav aria-label="Application sections"><a href="#date-management">1. Activity dates</a> | <a href="#source-replication">2. Source replication</a></nav>' + bulkDates.form(res) + deploymentRoutes.form(res) + activityDates.form(res),
+  workspace: true,
+  activityForm: res => workspace({
+    dates:bulkDates.form(res),replication:deploymentRoutes.form(res),
+    selected:res.locals.uiSection||'dates',
+    history:`<div class="section-heading"><div><h2>Pick up where you left off</h2><p>Review saved results, download reports, or return to a deployment waiting for activation.</p></div></div><div class="history-grid"><section class="panel"><span class="eyebrow">Activity dates</span><h3>Date update jobs</h3><p>See course validation, applied dates and read-back results.</p>${bulkDates.historyButton(res)}</section><section class="panel"><span class="eyebrow">Source replication</span><h3>Deployment jobs</h3><p>Check submission results and activate replicas after copy completion.</p>${deploymentRoutes.historyButton(res)}</section></div>`,
+    tools:diagnosticForm(res.locals.ltik)+activityDates.form(res)
+  }),
   client: discovery,
   deploymentId: BS_DEPLOYMENT_ID
 });
 lti.onConnect(diagnostics.launch);
+lti.app.post('/workspace',(req,res)=>{res.locals.uiSection=['dates','replication','history'].includes(req.body?.section)?req.body.section:'dates';return diagnostics.launch(res.locals.token,req,res);});
 // Not whitelisted: ltijs validates the LTI session before this handler runs.
 lti.app.get('/diagnostics/activities', diagnostics.activities);
 // Protected POST routes; preview/apply tickets are bound to the validated LTI session.

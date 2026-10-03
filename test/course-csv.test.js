@@ -9,7 +9,7 @@ test('CSV preserves numeric codes, BOM, leading zeroes, quoted values and row di
  assert.equal(rows[2].duplicateOf,3);
 });
 test('CSV rejects malformed headers, quoting, empty input and limits',()=>{
- for(const csv of ['', 'id,code\n1,', 'OrgUnitId,OrgUnitId\n1,', 'OrgUnitId,OrgUnitCode\n"bad', 'OrgUnitId,OrgUnitCode\n,', 'OrgUnitId,OrgUnitCode\n'+('1,\n'.repeat(101)), 'x'.repeat(16385)])assert.throws(()=>parseCourseCsv(csv));
+ for(const csv of ['', 'id,code\n1,', 'OrgUnitId,OrgUnitId\n1,', 'OrgUnitId,OrgUnitCode\n"bad', 'OrgUnitId,OrgUnitCode\n,', 'OrgUnitId,OrgUnitCode\n'+('1,\n'.repeat(10001)), 'x'.repeat(5*1024*1024+1)])assert.throws(()=>parseCourseCsv(csv));
  assert.equal(parseCourseCsv('OrgUnitId,OrgUnitCode\ninvalid,')[0].status,'invalid');
 });
 test('resolver uses exact code query, all paged matches and offering endpoint; no numeric inference',async()=>{
@@ -36,3 +36,5 @@ test('activity-date validation accepts genuine Source Courses only after source-
  assert.equal((await c.get('9531')).orgUnitId,'9531');assert.equal(sourceCalls,1);
  api.read=async()=>{throw Object.assign(Error('forbidden'),{status:403});};await assert.rejects(()=>c.get('9531'));assert.equal(sourceCalls,1);
 });
+
+test('accepts 10,000 unique course rows',()=>{const rows=parseCourseCsv('OrgUnitId,OrgUnitCode\n'+Array.from({length:10000},(_,i)=>`${i+1},`).join('\n'));assert.equal(rows.length,10000);assert.ok(rows.every(r=>r.status==='pending'));});
