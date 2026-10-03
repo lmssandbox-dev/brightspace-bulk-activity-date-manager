@@ -1,6 +1,11 @@
-# Delivery status
+# Brightspace Source Courses Tools — Delivery Status
 
 ## Completed
+
+- Application branding and folder renamed to Brightspace Source Courses Tools.
+- Left sidebar navigation and simplified upload UI.
+- 10,000-row / 5 MB date uploads, chunked checkpoints and paginated results.
+- Named time zone selection, saved zone context and clock-change validation.
 
 - Activity discovery, normalization and native writers for Assignments, Quizzes and Discussion Topics.
 - User-validated live preview/apply/read-back/unchanged behavior and CSV bulk date updates.
@@ -15,3 +20,5 @@
 3. Verify the D2L-based interface in the deployed LTI frame; local browser and regression checks are complete.
 
 No second service, database or LTI installation is required. Copy completion remains manually confirmed.
+
+The large-upload and time-zone improvements have automated local coverage; live deployment validation remains pending.

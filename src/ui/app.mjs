@@ -1,7 +1,4 @@
 import '@brightspace-ui/core/components/button/button.js';
-import '@brightspace-ui/core/components/tabs/tabs.js';
-import '@brightspace-ui/core/components/tabs/tab.js';
-import '@brightspace-ui/core/components/tabs/tab-panel.js';
 import '@brightspace-ui/core/components/alert/alert.js';
 import '@brightspace-ui/core/components/loading-spinner/loading-spinner.js';
 import './app.css';
@@ -34,3 +31,14 @@ for(const form of document.querySelectorAll('form')){
 }
 // Browsers may restore a submitted page through their back/forward cache.
 window.addEventListener('pageshow',()=>{for(const button of document.querySelectorAll('d2l-button'))button.disabled=false;});
+
+// Navigation keeps the existing signed forms and entered values in their panels.
+for(const link of document.querySelectorAll('[data-section]')){
+ link.addEventListener('click',event=>{
+  event.preventDefault();
+  const section=link.dataset.section;
+  for(const item of document.querySelectorAll('[data-section]'))item.removeAttribute('aria-current');
+  link.setAttribute('aria-current','page');
+  for(const panel of document.querySelectorAll('.workspace-content>section'))panel.hidden=panel.id!=='pane-'+section;
+ });
+}

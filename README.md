@@ -1,12 +1,12 @@
-# Brightspace Bulk Activity Date Manager
+# Brightspace Source Courses Tools
 
-One LTI application with two workflow sections, deployed to one Render service. The existing LTI installation, OAuth configuration, MongoDB database and local `.env` are retained.
+A toolkit for managing Brightspace Source Courses, currently offering Bulk Activity Dates Manager and Bulk Source Courses Deployer. One LTI application with two workflow sections, deployed to one Render service. The existing LTI installation, OAuth configuration, MongoDB database and local `.env` are retained.
 
 ## 1. Activity dates
 
-Upload or paste a UTF-8 CSV with headers `OrgUnitId,OrgUnitCode`. Supply exactly one ID or code per row; keep both columns in the header. The app accepts Course Offerings and actual Source Courses.
+Upload a UTF-8 CSV with headers `OrgUnitId,OrgUnitCode`. Supply exactly one ID or code per row; keep both columns in the header. The app accepts Course Offerings and actual Source Courses.
 
-Enter Start, Due and End in Brasília time. Start must be before Due; Due must be on or before End. Validate and preview resolves every course and discovers Assignments, Quizzes and Discussion Topics, including undated activities, without changes. Apply writes the saved plan, reads dates back and records per-activity results. Return through My recent jobs or download the CSV report.
+Choose a time zone (Brasília by default), then enter Start, Due and End. The selected zone is saved with the job; skipped or repeated local times around clock changes are rejected. Start must be before Due; Due must be on or before End. 2. Review Dates resolves every course and discovers Assignments, Quizzes and Discussion Topics, including undated activities, without changes. Apply writes the saved plan, reads dates back and records per-activity results. Return through My recent jobs or download the CSV report.
 
 Limits: 10,000 CSV data rows, 5 MB of UTF-8 CSV, 250,000 activities per date job. Duplicates are processed once. Invalid rows or incomplete discovery block the plan. Previews must be confirmed within 30 minutes; confirmed jobs can finish or resume after that window. Changed dates are rejected unless already equal to the requested dates. Availability modes and unrelated activity settings are preserved.
 
@@ -59,7 +59,7 @@ Preview is the default; Discussion Topics require the forum ID. The CLI uses the
 
 ## D2L interface
 
-The workspace uses `@brightspace-ui/core` components for Activity dates, Source replication and Job history tabs, buttons, alerts and loading indicators. Native date inputs retain explicit Brasília time semantics. CSV templates, grouped replica results and collapsible diagnostics are included. Deployment submission never implies copy completion.
+The workspace has a left sidebar for Bulk Activity Dates Manager, Bulk Source Courses Deployer and Job History. It uses `@brightspace-ui/core` buttons, alerts and loading indicators. Native date inputs use the selected time zone. CSV templates and grouped replica results are included; development tools and the footer are omitted. Deployment submission never implies copy completion.
 
 `npm ci` builds frontend assets automatically through postinstall. `npm start` also builds them before starting the server. For manual builds use `npm run build`. Render may continue using the existing service; no separate frontend hosting or database is needed. Commit package.json, package-lock.json, src/ui, the updated source and scripts/build-ui.js. Generated public/assets files are ignored by Git and rebuilt during deployment. Browser assets are served locally; no CDN is required.
 
@@ -70,3 +70,7 @@ The frontend was checked locally with synthetic jobs and no Brightspace writes. 
 Date-job records use immutable chunks in `bulk_date_chunks`, publishing checkpoint references only after chunks are stored. Planning checkpoints every 50 work items; execution saves before and after each activity. A restarted worker resumes resolution/discovery and skips saved results. An in-flight write is flagged as uncertain, never automatically repeated. Systemic API failures still stop writes. Replication retains its 100-row / 16 KB limits and existing recovery rules.
 
 Result tables show 100 records per page; the CSV report includes all records. Processing remains sequential to bound API traffic. The complete job is loaded into worker memory, so size the server for the activity ceiling; chunking removes the single MongoDB document limit but is not a streaming worker. Historical immutable chunks are retained and need a retention policy before sustained high-volume production use. Large jobs have been tested locally with synthetic data, not at 10,000-course scale against a live Brightspace tenant.
+
+## Application identity
+
+Display name: **Brightspace Source Courses Tools**. Package name: `brightspace-source-courses-tools`. Project folder: `Brightspace Source Courses Tools`. The two tools retain their feature names. This branding change does not rename the existing Render service URL, LTI registration, environment variables, MongoDB database, collections or job namespace.

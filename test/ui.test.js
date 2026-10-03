@@ -16,9 +16,10 @@ test('UI middleware serves only public bundle paths and leaves CSV/JSON payloads
  let sent;const res={locals:{ltik:'"/><script>bad()</script>'},getHeader:()=>'',set:()=>{},send:value=>{sent=value;}};
  middleware({path:'/bulk/preview'},res,()=>{});res.send('<h1>Preview</h1>');assert.match(sent,/<!doctype html>/);assert.match(sent,/\/assets\/app.js/);assert.doesNotMatch(sent,/<script>bad/);assert.match(sent,/&lt;script&gt;/);
 });
-test('workspace contains separate labelled panels and collapses development tools',()=>{
+test('workspace renders the selected sidebar panel and omits development tools',()=>{
  const html=workspace({dates:'Dates',replication:'Replication',history:'History',tools:'Diagnostics',selected:'replication'});
- assert.match(html,/id="tab-replication" text="Source Replication" selected/);assert.match(html,/labelled-by="tab-dates"/);assert.match(html,/<details class="developer-tools">/);
+ assert.match(html,/data-section="replication" aria-current="page"/);assert.match(html,/id="pane-dates" hidden/);assert.match(html,/id="pane-replication"  aria-label="Bulk Source Courses Deployer"/);assert.doesNotMatch(html,/Development tools|d2l-tabs/);
+ assert.match(page('content'),/Brightspace Source Courses Tools/);assert.doesNotMatch(page('content'),/<footer>/);
  assert.doesNotMatch(page('content',{ltik:'secret'}),/href="[^\"]*secret/);
 });
 test('submitted replication never claims copy completion or polls it and preserves activation confirmation',()=>{

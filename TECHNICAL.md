@@ -1,4 +1,4 @@
-# Implementation
+# Brightspace Source Courses Tools — Implementation
 
 ## Date feature: src/dates
 
@@ -21,7 +21,7 @@ A deployment ID confirms initiation, not copy completion. Unexpected or lost res
 - id.js, courses.js, deploymentGuard.js: identities, course/source lookup and LTI launch-deployment restriction.
 - database.js: dedicated database validation.
 - jobs.js: common job lifecycle, date planning/execution and delegation to replication jobs.
-- store.js: existing bulk_date_jobs and bulk_date_locks collections, ownership, confirmations and leases.
+- store.js: existing bulk_date_jobs, bulk_date_chunks and bulk_date_locks collections, ownership, confirmations and leases.
 - routes.js: shared signed workflow actions, date bulk forms and delegation to the replication view.
 
 One worker lease coordinates both workflows. Source/replica reservations protect unresolved deployment batches against overlapping bulk writes. Existing database records, namespace, configuration and endpoints remain unchanged; no data migration is needed.
@@ -38,4 +38,8 @@ src/ui/page.js renders the shared shell and presentation helpers. src/ui/install
 
 Date presentation lives in src/dates/view.js and replication presentation in src/replication/view.js. The shared route controller retains authorization, ownership, expiry and atomic-confirmation behavior. The workspace route only renders forms and uses the existing LTI guard. No writer, database or OAuth protocol changes are introduced by the interface.
 
-Esbuild bundles the browser module and styles into public/assets/app.js and app.css. D2L dependencies are pinned in the lockfile. Asset routes contain no session data. Local browser checks cover tabs, responsive layout, file loading, required confirmations and submit behavior with fixture-only jobs.
+Esbuild bundles the browser module and styles into public/assets/app.js and app.css. D2L dependencies are pinned in the lockfile. Asset routes contain no session data. Local browser checks cover navigation, responsive layout, file loading, required confirmations and submit behavior with fixture-only jobs.
+
+## Time zones and navigation
+
+The sidebar switches between date management, deployment and history while preserving entered form values. `src/dates/timeZone.js` validates named time zones and converts local inputs to UTC, rejecting nonexistent and ambiguous local times. Date jobs retain the selected zone for reviews and results; reports keep UTC date columns and include the selected zone. Existing jobs without a saved zone default to America/Sao_Paulo.
