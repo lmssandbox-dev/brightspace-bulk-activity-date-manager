@@ -61,3 +61,13 @@ test('review and results retain sidebar POST navigation without exposing session
  const home=page(workspace({dates:'Dates',replication:'Deploy',history:'History'}),{ltik:'session-secret'});
  assert.equal((home.match(/class="sidebar-layout"/g)||[]).length,1);
 });
+
+test('successful date jobs show confirmation instead of review details; partial failures do not claim success',()=>{
+ const job={_id:'j',status:'completed',dates:{},rows:[],courses:[{orgUnitId:'1'}],tasks:[{activity:{type:'quiz',id:'1'},result:{status:'updated'}},{activity:{type:'quiz',id:'2'},result:{status:'unchanged'}}]};
+ const view=createDateView({writeEnabled:()=>true});
+ const html=view.render({},job,helpers);
+ assert.match(html,/Activity dates updated and verified/);assert.match(html,/activity already had/);assert.match(html,/Verified dates/);
+ assert.doesNotMatch(html,/Review your date updates|CSV validation|Course validation|Job details|My recent jobs|Page 1 of/);
+ job.status='completedWithErrors';job.tasks[0].result={status:'failed',error:{message:'Verification failed'}};
+ const failed=view.render({},job,helpers);assert.doesNotMatch(failed,/success-confirmation/);assert.match(failed,/Verification failed/);
+});

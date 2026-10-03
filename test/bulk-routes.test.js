@@ -10,7 +10,7 @@ const routes=createBulkDates({jobs,deploymentId:'d',secret:'secret',writeEnabled
 return {routes,calls,job,advance:()=>{time+=1800001;}};}
 async function preview(s){const res=response();await s.routes.preview({body:{ticket:ticket(s.routes.form(res),'preview'),csv:'OrgUnitId,OrgUnitCode\n1,',start:'2027-01-01T09:00',due:'2027-01-02T09:00',end:'2027-01-03T09:00'}},res);return res;}
 test('bulk preview creates a plan; apply uses saved ID only and cannot repeat',async()=>{
- const s=setup(),p=await preview(s);assert.equal(s.calls.length,1);assert.match(p.body,/Apply dates/);assert.doesNotMatch(p.body,/<script>alert/);assert.match(p.body,/&lt;script&gt;/);
+ const s=setup(),p=await preview(s);assert.equal(s.calls.length,1);assert.match(p.body,/3\. Apply &amp; Verify/);assert.doesNotMatch(p.body,/Review your date updates/);assert.doesNotMatch(p.body,/<script>alert/);assert.doesNotMatch(p.body,/CSV validation|Course validation|Job details|My recent jobs|Page 1 of/);
  const body={ticket:ticket(p.body,'apply'),jobId:'j',dates:'forged',csv:'forged'},r=response();await s.routes.apply({body},r);assert.equal(s.calls[1].id,'j');assert.equal(s.calls[1].dates,undefined);
  const repeat=response();await s.routes.apply({body},repeat);assert.equal(repeat.code,409);
 });

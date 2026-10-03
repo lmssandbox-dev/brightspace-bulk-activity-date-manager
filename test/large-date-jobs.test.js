@@ -33,7 +33,7 @@ test('resumed execution skips saved successes and flags in-flight work instead o
  assert.equal(s.calls.filter(c=>c==='write').length,1);assert.equal(result.tasks[0].result.status,'updated');assert.equal(result.tasks[1].result.error.category,'UNCERTAIN_OUTCOME');assert.equal(result.status,'completedWithErrors');
 });
 test('date results paginate large task lists without rendering every activity',()=>{
- const job={_id:'j',status:'completed',rows:[],courses:[],dates,tasks:Array.from({length:1000},(_,i)=>({name:`Activity-${i}`,activity:{type:'quiz',id:String(i)},result:{status:'updated'}}))};
+ const job={_id:'j',status:'completedWithErrors',rows:[],courses:[],dates,tasks:Array.from({length:1000},(_,i)=>({name:`Activity-${i}`,activity:{type:'quiz',id:String(i)},result:{status:'updated'}}))};
  const html=createDateView({writeEnabled:()=>true}).render({},job,{now:()=>0,button:()=>'',page:2});
  assert.match(html,/Page 2 of 10/);assert.match(html,/Activity-100</);assert.match(html,/Activity-199</);assert.doesNotMatch(html,/Activity-99<|Activity-200</);
 });

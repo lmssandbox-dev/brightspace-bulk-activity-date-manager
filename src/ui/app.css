@@ -11,3 +11,7 @@ main{max-width:1440px;padding:24px 32px 52px}.app-header{padding:18px 32px}.side
 .sidebar nav button[data-sidebar-native] span{font-size:20px;line-height:1}
 .sidebar nav button[data-sidebar-native]:hover{background:#edf0f3;color:#20252a}
 .sidebar nav button[data-sidebar-native][aria-current]{background:#e7eef5;color:#005b9e}
+
+.confirmation-actions{display:flex;justify-content:flex-end;margin-top:18px}.confirmation-actions form{margin:0}
+
+.success-confirmation{background:#edf8f1;border-color:#a8d5b8;border-left-color:#27834b;color:#205b36}.success-confirmation h2{color:#205b36}.success-confirmation p{margin-bottom:0}
