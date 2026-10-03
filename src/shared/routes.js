@@ -66,7 +66,7 @@ function createBulkDates({jobs,deploymentId,secret,writeEnabled,now=Date.now,vie
   return handlers;
 }
 function report(job) {
-  const rows=[['Record','CSV row','Course ID','Course code','Activity type','Activity ID','Name','Status','Requested Start UTC','Requested Due UTC','Requested End UTC','Verified Start UTC','Verified Due UTC','Verified End UTC','Message','Selected time zone']];
+  const rows=[['Record','CSV row','Course ID','Course code','Activity type','Activity ID','Name','Status','Requested Start UTC','Requested Due UTC','Requested End UTC','Current Start UTC','Current Due UTC','Current End UTC','Message','Selected time zone']];
   for(const r of job.rows)rows.push(['CSV',r.row,r.resolvedId||r.orgUnitId,r.orgUnitCode,'','','',r.status,'','','','','','',r.message,job.timeZone||DEFAULT_ZONE]);
   const coursesById=new Map(job.courses.map(c=>[c.orgUnitId,c]));
   for(const t of job.tasks){const r=t.result||t.preview,c=coursesById.get(t.orgUnitId);rows.push(['Activity',c?.row,t.orgUnitId,c?.code,t.activity.type,t.activity.id,t.name,r.status,job.dates.start,job.dates.due,job.dates.end,r.verifiedDates?.start,r.verifiedDates?.due,r.verifiedDates?.end,r.error?.message,job.timeZone||DEFAULT_ZONE]);}
