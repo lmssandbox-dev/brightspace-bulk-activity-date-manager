@@ -10,7 +10,7 @@ function setup({lost=false,duplicate=false,recover=[]}={}){
   find:filter=>({toArray:async()=>recover}),findOne:async filter=>{calls.push({name,op:'get',filter});return null;},insertOne:async doc=>calls.push({name,op:'insert',doc})
  });
  const mongoClient={connect:async()=>{},db:()=>({collection}),close:async()=>{}};
- const store=createBulkStore({uri:'mongodb://localhost/brightspace_activity_date_manager',namespace:'n',mongoClient,now:()=>100});
+ const store=createBulkStore({uri:'mongodb://localhost/brightspace_source_courses_tool',namespace:'n',mongoClient,now:()=>100});
  return {store,calls};
 }
 test('Mongo confirmation is a single owner/status/expiry-guarded mutation',async()=>{
