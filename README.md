@@ -6,7 +6,7 @@ A toolkit for managing Brightspace Source Courses, currently offering Bulk Activ
 
 Upload a UTF-8 CSV with headers `OrgUnitId,OrgUnitCode`. Supply exactly one ID or code per row; keep both columns in the header. The app accepts Course Offerings and actual Source Courses.
 
-Choose a time zone (Brasília by default), then enter Start, Due and End. The selected zone is saved with the job; skipped or repeated local times around clock changes are rejected. Start must be before Due; Due must be on or before End. 2. Review Dates resolves every course and discovers Assignments, Quizzes and Discussion Topics, including undated activities, without changes. Apply writes the saved plan, reads dates back and records per-activity results. Return through My recent jobs or download the CSV report.
+Choose a time zone (Brasília by default), then enter Start, Due and End. The selected zone is saved with the job; skipped or repeated local times around clock changes are rejected. Start must be before Due; Due must be on or before End. 2. Review Updates resolves every course and discovers Assignments, Quizzes and Discussion Topics, including undated activities, without changes. Apply writes the saved plan, reads dates back and records per-activity results. Return through My recent jobs or download the CSV report.
 
 Limits: 10,000 CSV data rows, 5 MB of UTF-8 CSV, 250,000 activities per date job. Duplicates are processed once. Invalid rows or incomplete discovery block the plan. Previews must be confirmed within 30 minutes; confirmed jobs can finish or resume after that window. Changed dates are rejected unless already equal to the requested dates. Availability modes and unrelated activity settings are preserved.
 
